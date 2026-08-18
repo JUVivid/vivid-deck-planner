@@ -1,0 +1,3 @@
+# normalize line endings in the repo (checkout stays platform-native)
+* text=auto
+*.bat text eol=crlf
