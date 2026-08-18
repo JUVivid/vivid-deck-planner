@@ -60,8 +60,23 @@ export function QuoteView() {
   const quote = computed.quote
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
   // company numbers are NEVER on screen by default — this page gets shown to
-  // customers live. The rep opts in, and it resets to hidden on every visit.
+  // customers live, and reps don't get the breakdown either. Opening it takes
+  // the manager password; the panel resets to hidden on every visit.
+  // (SHA-256 of the password — the password itself is not in the bundle.)
+  const INTERNAL_HASH = '873cfcae7849d1557eee7c9db749bd91a59b962af3450ed6948eabe948f6276a'
   const [showInternal, setShowInternal] = useState(false)
+  const toggleInternal = async () => {
+    if (showInternal) {
+      setShowInternal(false)
+      return
+    }
+    const pw = window.prompt('Manager password:')
+    if (!pw) return
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw))
+    const hex = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
+    if (hex === INTERNAL_HASH) setShowInternal(true)
+    else window.alert('Incorrect password.')
+  }
 
   return (
     <div className="quote-page">
@@ -126,7 +141,7 @@ export function QuoteView() {
             onChange={(e) => updateQuote((c) => (c.preparedFor = e.target.value))}
           />
         </label>
-        <button title="Rep only — toggle the company breakdown" onClick={() => setShowInternal((v) => !v)}>
+        <button title="Manager only — password required" onClick={() => void toggleInternal()}>
           {showInternal ? 'Hide internals' : 'Internals'}
         </button>
         <button className="primary" onClick={() => window.print()}>
