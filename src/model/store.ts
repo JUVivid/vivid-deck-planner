@@ -38,17 +38,20 @@ function loadInitial(): Project {
       }
     }
   } catch {
-    /* fall through to demo */
+    /* fall through to a blank project */
   }
-  return demoProject()
+  // first visit: a clean sheet, ready to draw. The sample deck stays available
+  // under File → "New from sample deck".
+  return blankProject()
 }
 
 export const store = createStore<AppState>(() => {
   const project = loadInitial()
+  const fresh = project.tiers.length === 0
   return {
     project,
     page: 'design',
-    tool: 'select',
+    tool: fresh ? 'draw' : 'select',
     view: 'top',
     activeTierId: project.tiers[0]?.id ?? null,
     selection: { kind: 'none' },
@@ -63,7 +66,9 @@ export const store = createStore<AppState>(() => {
     },
     snapIn: 3,
     overlayVersion: 0,
-    statusMsg: '',
+    statusMsg: fresh
+      ? 'Draw your deck outline: click to place corners, Enter or click the first corner to close.'
+      : '',
   }
 })
 
