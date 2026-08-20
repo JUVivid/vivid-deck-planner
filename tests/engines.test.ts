@@ -1693,12 +1693,11 @@ describe('correctness pass (framing / railing / fascia / stairs)', () => {
     // dedupe stays consistent with the net post count
     expect(rl.postPlacements.length).toBe(rl.posts)
     // The stairs add only their 2 BOTTOM posts — the tops are the deck run's
-    // corner posts. Same post SKU as the deck's end/corner sleeves, so it lands
-    // on one merged order line carrying both purposes.
+    // corner posts. Same post SKU as the deck's sleeves (every post gets one —
+    // steel cores included), so it lands on one merged order line.
     const bom = computeProject(p).bom
     const stairPosts = bom.find((l) => l.detail.includes('stair rail bottom posts'))!
-    expect(stairPosts.detail).toMatch(/end\/corner posts/)
-    const deckEndPosts = rl.postPlacements.filter((pl) => pl.role !== 'line').length
-    expect(stairPosts.qty).toBe(deckEndPosts + 2)
+    expect(stairPosts.detail).toMatch(/sleeves over every post/)
+    expect(stairPosts.qty).toBe(rl.postPlacements.length + 2)
   })
 })

@@ -49,7 +49,8 @@ export function renderElevation(
     return
   }
 
-  // fit: horizontal extent across all tiers, vertical = tallest tier + guard
+  // fit: horizontal extent across all tiers AND their stairs (a tall flight
+  // projects well past the deck — it must never run off the sheet)
   let sxMin = Infinity
   let sxMax = -Infinity
   let maxH = 4
@@ -60,6 +61,14 @@ export function renderElevation(
       sxMax = Math.max(sxMax, sx)
     }
     maxH = Math.max(maxH, tier.height + 4)
+  }
+  for (const sc of computed.stairs) {
+    if (!sc.ok) continue
+    for (const p of sc.footprint) {
+      const sx = dot(p, basis.right)
+      sxMin = Math.min(sxMin, sx)
+      sxMax = Math.max(sxMax, sx)
+    }
   }
   const span = Math.max(6, sxMax - sxMin)
   const scale = Math.min((w - 160) / span, (h - 170) / (maxH + frostDepthFt(project)), 48)
@@ -421,21 +430,28 @@ export function renderElevation(
           }
         }
       }
-      // posts from the deduped placements (corner posts drawn once, lined up)
+      // posts from the deduped placements (corner posts drawn once, lined up).
+      // A surface-mount (Secure Mount) post is only a steel CORE — the sleeve,
+      // cap and skirt go over it, so the FINISHED post looks exactly like its
+      // neighbours; the only tell is the base plate at the deck.
       for (const pl of rl.postPlacements) {
         const px = dot(pl.pos, basis.right)
         const opt = resolvePost(rsys, rcfg.postOptionId, pl.role)
-        const wpx = Math.max(2.5, (opt.sizeIn / 12) * scale)
         const surface = opt.mount === 'surface-mount'
-        ctx.fillStyle = surface ? '#5b6472' : railFill
-        ctx.strokeStyle = surface ? '#3a3f47' : railStroke
+        const drawSizeIn = surface ? resolvePost(rsys, rcfg.postOptionId, 'end').sizeIn : opt.sizeIn
+        const wpx = Math.max(2.5, (drawSizeIn / 12) * scale)
+        ctx.fillStyle = railFill
+        ctx.strokeStyle = railStroke
         ctx.lineWidth = 0.8
         ctx.fillRect(X(px) - wpx / 2, Y(top + guardFt + 0.06), wpx, (guardFt + 0.06) * scale)
         ctx.strokeRect(X(px) - wpx / 2, Y(top + guardFt + 0.06), wpx, (guardFt + 0.06) * scale)
         if (surface) {
+          // base plate hint under the skirt
           ctx.fillStyle = '#3a3f47'
-          ctx.fillRect(X(px) - wpx * 0.9, Y(top + 0.02), wpx * 1.8, 0.12 * scale)
-        } else if (rsys.postAccessory) {
+          ctx.fillRect(X(px) - wpx * 0.75, Y(top + 0.02), wpx * 1.5, 0.06 * scale)
+          ctx.fillStyle = railFill
+        }
+        if (rsys.postAccessory) {
           // cap: overhanging slab, with a raised tier for the pyramid-style
           // Post Cap; skirt: flared ring where the post meets the deck
           const capW = wpx * 1.3
@@ -658,10 +674,28 @@ export function renderElevation(
         ctx.fillStyle = railFill
         ctx.strokeStyle = '#33517e'
         ctx.lineWidth = 0.8
+        // stair posts get the same cap + skirt treatment as the deck run
+        const stairCapSkirt = (x: number, topZ: number, baseZ: number) => {
+          if (!rsys.postAccessory) return
+          const capW = postW * 1.3
+          const capH = Math.max(2, (1 / 12) * scale)
+          ctx.fillRect(X(x) - capW / 2, Y(topZ) - capH, capW, capH)
+          const capId = rcfg.postCapId ?? rsys.postAccessory.caps[0]?.id
+          if (capId === 'cap' || capId === 'std') {
+            const tierH = Math.max(1.5, (0.75 / 12) * scale)
+            ctx.fillRect(X(x) - (postW * 0.7) / 2, Y(topZ) - capH - tierH, postW * 0.7, tierH)
+          }
+          if (rsys.postAccessory.skirt) {
+            const skW = postW * 1.35
+            ctx.fillRect(X(x) - skW / 2, Y(baseZ + 3 / 12), skW, Math.max(2, (3 / 12) * scale))
+          }
+        }
         ctx.fillRect(X(topSx) - postW / 2, Y(top + guardFt + 0.05), postW, (guardFt + 0.05) * scale)
         ctx.fillRect(X(xEnd) - postW / 2, Y(zNoseBot + guardFt + 0.05), postW, (zNoseBot + guardFt + 0.05 - landZ) * scale)
+        stairCapSkirt(xEnd, zNoseBot + guardFt + 0.05, landZ)
         // intermediate posts: stair rail sections come 6' — a long rake can't
-        // run unsupported, so mids split it into equal bays
+        // run unsupported, so mids split it into equal bays. Each mid post
+        // lands ON the tread below it (one riser past the rake line).
         const rakeHoriz = Math.abs(xEnd - topSx)
         const rakeSlope = Math.hypot(rakeHoriz, top - zNoseBot)
         const stairBays = Math.max(1, Math.ceil(rakeSlope / 6))
@@ -669,7 +703,9 @@ export function renderElevation(
           const tM = m / stairBays
           const xm = topSx + sgn * rakeHoriz * tM
           const zm = top + (zNoseBot - top) * tM
-          ctx.fillRect(X(xm) - postW / 2, Y(zm + guardFt + 0.05), postW, (guardFt + 0.05) * scale)
+          const zBase = Math.max(landZ, zm - rFt)
+          ctx.fillRect(X(xm) - postW / 2, Y(zm + guardFt + 0.05), postW, (zm + guardFt + 0.05 - zBase) * scale)
+          stairCapSkirt(xm, zm + guardFt + 0.05, zBase)
         }
         // raked top rail (springs off the shared post, follows the nosing line)
         ctx.strokeStyle = railFill

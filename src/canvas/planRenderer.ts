@@ -385,21 +385,23 @@ export function renderPlan(
         ctx.lineWidth = 1
         line(piece.railA, piece.railB)
       }
-      // posts from the deduped placements (corners resolved on the bisector)
+      // posts from the deduped placements (corners resolved on the bisector).
+      // Surface-mount steel cores get sleeved like every other post — finished
+      // posts all read the same; a thin base-plate outline marks the mount.
       for (const pl of rl.postPlacements) {
         const opt = resolvePost(rsys, rcfg.postOptionId, pl.role)
+        const surface = opt.mount === 'surface-mount'
+        const drawSizeIn = surface ? resolvePost(rsys, rcfg.postOptionId, 'end').sizeIn : opt.sizeIn
         const q = W(pl.pos)
-        const sizePx = Math.max(3, (opt.sizeIn / 12) * s)
-        if (opt.mount === 'surface-mount') {
-          ctx.fillStyle = '#3a3f47'
-          const basePx = Math.max(sizePx * 1.5, sizePx + 4)
-          ctx.fillRect(q.x - basePx / 2, q.y - basePx / 2, basePx, basePx)
-          ctx.fillStyle = '#5b6472'
-          ctx.fillRect(q.x - sizePx / 2, q.y - sizePx / 2, sizePx, sizePx)
-        } else {
-          ctx.fillStyle = C.railing
-          ctx.fillRect(q.x - sizePx / 2, q.y - sizePx / 2, sizePx, sizePx)
+        const sizePx = Math.max(3, (drawSizeIn / 12) * s)
+        if (surface) {
+          ctx.strokeStyle = '#3a3f47'
+          ctx.lineWidth = 1
+          const basePx = sizePx + 3
+          ctx.strokeRect(q.x - basePx / 2, q.y - basePx / 2, basePx, basePx)
         }
+        ctx.fillStyle = C.railing
+        ctx.fillRect(q.x - sizePx / 2, q.y - sizePx / 2, sizePx, sizePx)
       }
     }
 

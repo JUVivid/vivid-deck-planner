@@ -999,17 +999,20 @@ function railingBomForTier(
           section: S6,
           item: `${smp.name} — ${color}`,
           sku: 'rail:secure-mount',
-          detail: `${tierName}: interior (line) posts — top-mounted steel, no 4x4`,
+          detail: `${tierName}: interior (line) posts — steel core, no 4x4 wood`,
           qty: line,
           unit: 'ea',
         })
         acc({ section: S6, item: 'Surface-mount post hardware + base cover', sku: 'rail:surface-mount-hw', detail: `${tierName}: lag/thru-bolt to doubled blocking below`, qty: line, unit: 'ea' })
       }
       if (ends > 0) {
-        acc({ section: S6, item: `${sleeve.name} — ${color}`, sku: 'rail:sleeve-ccs-4x4', detail: `${tierName}: end/corner posts over blocking`, qty: ends, unit: 'ea' })
         acc({ section: S6, item: "4x4-8' PT post", sku: 'lumber:4x4-8', detail: `${tierName}: structural post inside each end/corner sleeve, bolted to rim/blocking`, qty: ends, unit: 'ea' })
-        acc({ section: S6, item: `${capName} + skirt`, sku: `rail:capskirt|${color}`, detail: `${tierName}: ${color}`, qty: ends, unit: 'ea' })
       }
+      // EVERY post gets the same finished look: the sleeve goes over the steel
+      // core on line posts just like it goes over the 4x4 on ends/corners,
+      // then the cap + skirt on top — mid-run posts never read different
+      acc({ section: S6, item: `${sleeve.name} — ${color}`, sku: 'rail:sleeve-ccs-4x4', detail: `${tierName}: sleeves over every post (steel cores + 4x4s)`, qty: total, unit: 'ea' })
+      acc({ section: S6, item: `${capName} + skirt`, sku: `rail:capskirt|${color}`, detail: `${tierName}: every post — ${color}`, qty: total, unit: 'ea' })
     } else {
       const opt = selectedPostOption(system, cfg.postOptionId)
       const heightNote = system.post.sleeveOverWood && cfg.heightIn === 42 ? " (8' for 42\" rail)" : ''
