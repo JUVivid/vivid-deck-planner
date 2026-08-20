@@ -662,14 +662,27 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
       // use the post the user actually selected — not the system's generic post
       const stairPost = resolvePost(system, rcfg.postOptionId, 'end')
       const midPosts = 2 * (stairBays - 1)
+      const stairPostQty = (edgeRailed ? 2 : 4) + midPosts
       acc({
         section: S.railing,
         item: `${stairPost.name} — ${rcfg.colorId}`,
         detail: `${label} — stair rail ${edgeRailed ? 'bottom' : ''} posts${midPosts > 0 ? ` + ${midPosts} intermediates on the rake` : ''}`,
-        qty: (edgeRailed ? 2 : 4) + midPosts,
+        qty: stairPostQty,
         unit: 'ea',
         note: edgeRailed ? 'Top posts shared with the deck guard corner posts.' : undefined,
       })
+      // every stair post is finished like the deck run's — cap + skirt each
+      if (system.postAccessory && !system.postAccessory.integral) {
+        const capName2 = system.postAccessory.caps.find((cp) => cp.id === rcfg.postCapId)?.name ?? system.postAccessory.caps[0]?.name ?? 'Post cap'
+        acc({
+          section: S.railing,
+          item: `${capName2} + skirt`,
+          sku: `rail:capskirt|${rcfg.colorId}`,
+          detail: `${label} — stair rail posts`,
+          qty: stairPostQty,
+          unit: 'ea',
+        })
+      }
       // a composite top rail is not graspable — code wants a separate handrail
       acc({
         section: S.railing,
