@@ -1154,6 +1154,90 @@ describe('railing fidelity: glass spacing, stair bays, caps & skirts', () => {
   })
 })
 
+describe('railing order math — bay division, parts, glass spans, cable runs', () => {
+  // 20×12, ledger north → rails E 12' + S 20' + W 12' = 44 lf, no stairs
+  const railDeck = (systemId: string, infillId: string, extra: Record<string, unknown> = {}) => {
+    const p = rectDeck(20, 12)
+    Object.assign(p.settings.railing, { systemId, infillId }, extra)
+    return p
+  }
+  const railLines = (c: ReturnType<typeof computeProject>) => c.bom.filter((l) => l.section.includes('Railing'))
+
+  it('divides runs into the fewest equal bays; corner posts are shared', () => {
+    const c = computeProject(railDeck('classic-composite', 'comp-bal'))
+    const rl = [...c.byTier.values()][0].railing
+    expect(rl.pieces.map((p) => p.sectionPlan.join(',')).sort()).toEqual(['10,10', '6,6', '6,6'])
+    expect(rl.sections).toBe(6)
+    expect(rl.postPlacements.length).toBe(7) // 3+3+3 minus 2 shared corners
+    // balusters: 4 six-foot kits ×13 + 2 ten-foot kits ×23 = 98 → 6 packs of 18
+    expect(rl.balusters).toBe(98)
+    const packs = railLines(c).find((l) => l.detail.includes('balusters'))!
+    expect(packs.qty).toBe(Math.ceil(98 / 18))
+    expect(railLines(c).find((l) => l.item.includes("Universal Rail Pack 6'"))!.qty).toBe(4)
+    expect(railLines(c).find((l) => l.item.includes("Universal Rail Pack 10'"))!.qty).toBe(2)
+    // every post finished: sleeve + cap/skirt for all 7 (steel cores included)
+    expect(railLines(c).find((l) => l.sku === 'rail:sleeve-ccs-4x4')!.qty).toBe(7)
+    expect(railLines(c).find((l) => l.sku?.startsWith('rail:capskirt'))!.qty).toBe(7)
+  })
+
+  it('GLASS: every bay ≤ 6\', one channel kit per bay, extra posts, no balusters', () => {
+    const c = computeProject(railDeck('classic-composite', 'glass'))
+    const rl = [...c.byTier.values()][0].railing
+    for (const p of rl.pieces) for (const s of p.sectionPlan) expect(s).toBeLessThanOrEqual(6)
+    expect(rl.sections).toBe(8) // 20' → 4 bays, 12' sides → 2 each
+    expect(rl.postPlacements.length).toBe(9) // vs 7 with balusters — glass adds posts
+    expect(railLines(c).find((l) => l.item.includes('Glass channel kit'))!.qty).toBe(8)
+    expect(railLines(c).find((l) => l.detail.includes('balusters'))).toBeUndefined()
+  })
+
+  it('CableRail (CCS): a kit per SECTION, graded intermediates, real cable footage', () => {
+    const c = computeProject(railDeck('classic-composite', 'cable', { heightIn: 36 }))
+    const rl = [...c.byTier.values()][0].railing
+    expect(rl.sections).toBe(6)
+    expect(railLines(c).find((l) => l.item.includes('CableRail hardware kit'))!.qty).toBe(6)
+    // 1 per 6' section (×4) + 3 per 10' section (×2) = 10
+    expect(railLines(c).find((l) => l.item.includes('intermediate baluster'))!.qty).toBe(10)
+    // cable: (len + 1.5') × 9 cables per section = 4×67.5 + 2×103.5 = 477 lf → one 500' spool
+    const spool = railLines(c).find((l) => l.item.includes('stainless cable'))!
+    expect(spool.item).toContain("500'")
+    expect(spool.qty).toBe(1)
+  })
+
+  it('IRX horizontal cable: cables run CONTINUOUSLY through corners — kits per run', () => {
+    const c = computeProject(railDeck('irx', 'h-cable', { colorId: 'Black', heightIn: 36, topStyleId: 'irx-top' }))
+    const rl = [...c.byTier.values()][0].railing
+    // E + S + W chain through both corners into ONE 44' run (max 60')
+    expect(rl.chains.length).toBe(1)
+    expect(rl.chains[0].lenFt).toBeCloseTo(44, 1)
+    expect(rl.chains[0].corners).toBe(2)
+    const kits = railLines(c).find((l) => l.item.includes('IRX cable kit'))!
+    expect(kits.item).toContain("45'") // 44' + termination slack → 45' kit
+    expect(kits.qty).toBe(11) // 11 cables at 36"
+    // 1 intermediate support per opening
+    expect(railLines(c).find((l) => l.item.includes('intermediate cable support'))!.qty).toBe(rl.sections)
+  })
+
+  it('IRX open mid-rail orders its panel cover + support channel per section', () => {
+    const c = computeProject(railDeck('irx', 'open-mid', { colorId: 'Black', heightIn: 36, topStyleId: 'irx-top' }))
+    const rl = [...c.byTier.values()][0].railing
+    const covers = railLines(c).filter((l) => l.item.includes('Universal Panel Cover'))
+    const channels = railLines(c).filter((l) => l.item.includes('unpunched support channel'))
+    expect(covers.reduce((s, l) => s + l.qty, 0)).toBe(rl.sections)
+    expect(channels.reduce((s, l) => s + l.qty, 0)).toBe(rl.sections)
+  })
+
+  it('Pinnacle Chippendale orders whole SQUARE panels + a bracket kit per section', () => {
+    const c = computeProject(railDeck('pinnacle', 'chippendale', { heightIn: 36 }))
+    const rl = [...c.byTier.values()][0].railing
+    // sections [6,8]: 20' → 3×8', sides → 2×6' each = 7 sections
+    expect(rl.sections).toBe(7)
+    const panels = railLines(c).find((l) => l.item.includes('Chippendale'))!
+    // 29.75" squares: 2 per 6' section (×4) + 3 per 8' section (×3) = 17
+    expect(panels.qty).toBe(17)
+    expect(railLines(c).find((l) => l.item.includes('rail bracket kit'))!.qty).toBe(7)
+  })
+})
+
 describe('customer quote', () => {
   const quoteOf = (fn?: (p: Project) => void) => {
     const p = demoProject()

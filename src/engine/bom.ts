@@ -655,6 +655,16 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
         unit: 'ea',
         note: 'Omit a side that runs along a wall.',
       })
+      // Statement / Pinnacle stair sections take their own stair bracket kits
+      if (system.id === 'statement' || system.id === 'pinnacle') {
+        acc({
+          section: S.railing,
+          item: `${system.name} stair rail bracket kit`,
+          detail: `${label} — 1 kit per stair section`,
+          qty: 2 * stairBays,
+          unit: 'ea',
+        })
+      }
       // top posts are SHARED with the deck guard run (one post per 90° turn —
       // level rail and rake connect on adjacent faces), so a railed edge only
       // adds the 2 bottom posts here; the tops are in the deck run's count
@@ -858,12 +868,19 @@ function railingBomForTier(
       })
       acc({ section: S6, item: `IRX ${top.name} ${len}' — ${color}`, detail: `${tierName}: top rail`, qty: count, unit: 'ea' })
     } else if (system.id === 'irx') {
+      const panelName =
+        inf.kind === 'cable-vertical'
+          ? 'Vertical Cable Panel'
+          : inf.kind === 'glass'
+            ? 'Universal Glass Panel Kit'
+            : 'Universal Panel'
       acc({
         section: S6,
-        item: `IRX ${inf.kind === 'cable-vertical' ? 'Vertical Cable Panel' : 'Universal Panel'} ${len}' x ${cfg.heightIn}" — ${color}`,
+        item: `IRX ${panelName} ${len}' x ${cfg.heightIn}" — ${color}`,
         detail: `${tierName}: ${inf.name} (pre-assembled, top rail separate)`,
         qty: count,
         unit: 'ea',
+        note: inf.kind === 'glass' ? '1/4" tempered glass sourced locally; 6\' kits only.' : undefined,
       })
       acc({
         section: S6,
@@ -881,6 +898,24 @@ function railingBomForTier(
           unit: 'ea',
         })
       }
+      if (inf.kind === 'open-mid') {
+        // per the 2026 guide: open mid-rail takes a Universal Panel Cover (the
+        // mid rail itself) + an unpunched support channel, per section
+        acc({
+          section: S6,
+          item: `IRX Universal Panel Cover ${len}' (open mid-rail) — ${color}`,
+          detail: `${tierName}: the mid rail below the open band`,
+          qty: count,
+          unit: 'ea',
+        })
+        acc({
+          section: S6,
+          item: `IRX unpunched support channel ${len}' (open mid-rail) — ${color}`,
+          detail: `${tierName}: carries the balusters under the mid rail`,
+          qty: count,
+          unit: 'ea',
+        })
+      }
     } else {
       acc({
         section: S6,
@@ -892,6 +927,29 @@ function railingBomForTier(
       })
       if (top.drinkRail) {
         acc({ section: S6, item: `${system.name} drink rail clip kit`, detail: `${tierName}: board-to-rail clips`, qty: count, unit: 'ea' })
+      }
+      // Statement / Pinnacle rail sections mount on bracket kits — one per section
+      if (system.id === 'statement' || system.id === 'pinnacle') {
+        acc({
+          section: S6,
+          item: `${system.name} rail bracket kit (4 brackets + screws)`,
+          detail: `${tierName}: 1 kit per straight level section`,
+          qty: count,
+          unit: 'ea',
+        })
+      }
+      // Pinnacle decorative panels are SQUARE (29¾" / 35¾") — whole panels per
+      // section, replacing the kit's balusters
+      if (inf.kind === 'panel') {
+        const sideFt = (cfg.heightIn === 42 ? 35.75 : 29.75) / 12
+        const perSection = Math.max(1, Math.floor((len + 0.1) / (sideFt + 0.1)))
+        acc({
+          section: S6,
+          item: `Pinnacle Decorative Panel "${inf.id.includes('web') ? 'Square Web' : 'Chippendale Type 1'}" for ${cfg.heightIn}" rails`,
+          detail: `${tierName}: ${perSection} per ${len}' section — panels replace the kit balusters; level sections only`,
+          qty: count * perSection,
+          unit: 'ea',
+        })
       }
     }
   }
