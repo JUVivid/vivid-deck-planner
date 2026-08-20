@@ -241,11 +241,20 @@ export function QuoteView() {
               </p>
             )}
             {quote.internal.unpricedMaterialLines > 0 && (
-              <p className="q-note">
+              <div className="q-note">
                 {quote.internal.unpricedMaterialLines} material line
-                {quote.internal.unpricedMaterialLines > 1 ? 's have' : ' has'} no price in the book (railing, fasteners,
-                hardware and tape are not on the current sheets) — the material figure is low by that amount.
-              </p>
+                {quote.internal.unpricedMaterialLines > 1 ? 's have' : ' has'} no price anywhere — the affected categories
+                show &ldquo;Pricing to follow&rdquo; until every line is priced (or a materials override is set):
+                <ul className="q-unpriced-list">
+                  {quote.internal.byCategory
+                    .filter((c) => c.unpriced > 0)
+                    .map((c) => (
+                      <li key={c.id}>
+                        <b>{c.label}:</b> {c.unpricedItems.join(' · ')}
+                      </li>
+                    ))}
+                </ul>
+              </div>
             )}
             {quote.pendingLines > 0 && (
               <p className="q-note">
@@ -266,10 +275,17 @@ export function QuoteView() {
               </thead>
               <tbody>
                 {quote.internal.byCategory
-                  .filter((c) => c.material > 0 || (c.labor ?? 0) > 0 || c.jobCosts > 0)
+                  .filter((c) => c.material > 0 || (c.labor ?? 0) > 0 || c.jobCosts > 0 || c.unpriced > 0)
                   .map((c) => (
                     <tr key={c.id}>
-                      <td>{c.label}</td>
+                      <td>
+                        {c.label}
+                        {c.unpriced > 0 && (
+                          <span className="q-unpriced-flag" title={c.unpricedItems.join(', ')}>
+                            {' '}⚠ {c.unpriced} unpriced
+                          </span>
+                        )}
+                      </td>
                       <td>{money(c.material)}</td>
                       <td>{money(c.tax)}</td>
                       <td>{c.labor === null ? '—' : money(c.labor)}</td>

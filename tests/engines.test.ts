@@ -1014,10 +1014,13 @@ describe('lumber cut optimization (cost-driven cutting stock)', () => {
     // must surface as special-order lines, not get silently split
     const p = rectDeck(24, 10)
     const c = computeProject(p)
-    const specials = c.bom.filter((l) => l.item.includes('special length'))
+    const specials = c.bom.filter((l) => l.item.includes('special order'))
     expect(specials.length).toBeGreaterThan(0)
     expect(specials.some((l) => l.detail.includes('ledger'))).toBe(true)
     expect(specials[0].note).toMatch(/FULL length/)
+    // special orders carry a priceable sku at the next even length so a dealer
+    // quote dropped into prices-live auto-attaches (24' demand -> lumber:2x8-24)
+    for (const s of specials) expect(s.sku).toMatch(/^lumber:2x(8|10|12)-\d+$/)
     // and no planned board carries a piece of a run longer than itself
     for (const pl of c.cutPlans) {
       for (const b of pl.boards) for (const cutp of b.cuts) expect(cutp.lenFt).toBeLessThanOrEqual(b.stockFt + 1e-6)
@@ -1783,5 +1786,67 @@ describe('correctness pass (framing / railing / fascia / stairs)', () => {
     const stairPosts = bom.find((l) => l.detail.includes('stair rail bottom posts'))!
     expect(stairPosts.detail).toMatch(/sleeves over every post/)
     expect(stairPosts.qty).toBe(rl.postPlacements.length + 2)
+  })
+})
+
+describe('quote pricing integrity — receipts attach, unpriced never quotes low', () => {
+  // the reported bug: a 25x15x7 IRX deck quoted railing at a fraction of its
+  // real price because no IRX order line carried a sku, so the Lansing receipt
+  // prices never attached and the material silently dropped out of the number
+  const irxDeck = () => {
+    const p = rectDeck(25, 15, 7)
+    Object.assign(p.settings.railing, { systemId: 'irx', colorId: 'Black', heightIn: 36 })
+    return p
+  }
+
+  it('IRX level run prices fully from receipts (the $2,816-vs-$6,700 bug)', () => {
+    const c = computeProject(irxDeck())
+    const cat = c.quote.internal.byCategory.find((x) => x.id === 'railing')!
+    expect(cat.unpriced).toBe(0)
+    // 8x 8' panels + 8x classic tops + 9 posts (receipts) + 9 hw sets (retail)
+    expect(cat.material).toBeCloseTo(8 * 214.36 + 8 * 69.93 + 9 * 67.01 + 9 * 16.8, 2)
+    const panel = c.bom.find((l) => l.item.includes('IRX Universal Panel'))!
+    expect(panel.sku).toBe('rail:irx-panel-36x8|Black')
+    expect(unitCostFor(panel.sku)).toBe(214.36)
+    const post = c.bom.find((l) => l.item.includes('aluminum post kit'))!
+    expect(unitCostFor(post.sku)).toBe(67.01)
+    const railSection = c.quote.sections.find((s) => s.id === 'railing')!
+    expect(railSection.price).not.toBeNull()
+    expect(railSection.price!).toBeGreaterThan(6000)
+  })
+
+  it('a category with unpriced material shows Pricing to follow — never a low number', () => {
+    const p = irxDeck()
+    const c = computeProject(p)
+    // the 25' deck needs 26' special-order sticks that have no price yet
+    const deckCat = c.quote.internal.byCategory.find((x) => x.id === 'deck')!
+    expect(deckCat.unpriced).toBeGreaterThan(0)
+    expect(deckCat.unpricedItems.join(',')).toMatch(/special order/)
+    const deckSection = c.quote.sections.find((s) => s.id === 'deck')!
+    expect(deckSection.price).toBeNull()
+    expect(deckSection.pending).toBe(true)
+    expect(c.quote.total).toBeNull() // the grand total never hides a gap either
+    // the railing category is unaffected and still prices
+    expect(c.quote.sections.find((s) => s.id === 'railing')!.price).not.toBeNull()
+    // a rep-entered materials override takes over pricing responsibility
+    // (fresh object — computeProject memoizes on project identity)
+    const p2 = structuredClone(p)
+    p2.settings.quote.materialsOverride = 30000
+    const c2 = computeProject(p2)
+    expect(c2.quote.sections.find((s) => s.id === 'deck')!.price).not.toBeNull()
+  })
+
+  it('IRX stair guard prices from the stair-panel receipt + real rake top rails', () => {
+    const p = irxDeck()
+    p.stairs.push({ id: uid('st'), tierId: p.tiers[0].id, edgeIndex: 2, t: 0.5, width: 4, landing: { kind: 'grade' } })
+    const c = computeProject(p)
+    const panel = c.bom.find((l) => l.item.includes('stair panel'))!
+    expect(panel.sku).toBe('rail:irx-stair-panel-36x6|Black')
+    expect(unitCostFor(panel.sku)).toBe(185.78)
+    const rake = c.bom.find((l) => l.detail.includes('top rail over each stair panel'))!
+    expect(rake.qty).toBe(panel.qty) // one rake top per stair panel
+    expect(unitCostFor(rake.sku)).toBe(59.73)
+    const stairPosts = c.bom.find((l) => l.detail.includes('stair rail bottom posts'))!
+    expect(unitCostFor(stairPosts.sku)).toBe(67.01)
   })
 })

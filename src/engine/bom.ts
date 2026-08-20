@@ -646,20 +646,40 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
       // intermediate post at every break (matches the drawings)
       const rakeSlopeFt = Math.hypot(sc.totalRunFt, sc.rise)
       const stairBays = Math.max(1, Math.ceil(rakeSlopeFt / 6))
+      const stairSectionSku =
+        system.id === 'irx'
+          ? `rail:irx-stair-panel-${rcfg.heightIn}x6|${rcfg.colorId}`
+          : system.id === 'statement' || system.id === 'pinnacle'
+            ? `rail:${system.id}-stair-kit-${rcfg.heightIn}|${rcfg.colorId}`
+            : 'rail:stair-rail-6'
       acc({
         section: S.railing,
-        item: `${system.name} stair rail section 6' — ${rcfg.colorId}`,
-        sku: 'rail:stair-rail-6',
+        item: `${system.name} stair ${system.id === 'irx' ? 'panel' : 'rail section'} 6' — ${rcfg.colorId}`,
+        sku: stairSectionSku,
         detail: `${label} — guard both sides (${stairBays} bay${stairBays > 1 ? 's' : ''} per side)`,
         qty: 2 * stairBays,
         unit: 'ea',
         note: 'Omit a side that runs along a wall.',
       })
+      if (system.id === 'irx') {
+        // IRX stair panels are panel-only — the top rail is a separate part, cut on the rake
+        const sTop = system.topStyles.find((t) => t.id === rcfg.topStyleId) ?? system.topStyles[0]
+        const sTopKind = sTop.id === 'irx-modern' ? 'modern' : 'classic'
+        acc({
+          section: S.railing,
+          item: `IRX ${sTop.drinkRail ? 'Classic Top Rail' : sTop.name} 6' (stair rake) — ${rcfg.colorId}`,
+          sku: `rail:irx-top-${sTop.drinkRail ? 'classic' : sTopKind}-6|${rcfg.colorId}`,
+          detail: `${label} — top rail over each stair panel`,
+          qty: 2 * stairBays,
+          unit: 'ea',
+        })
+      }
       // Statement / Pinnacle stair sections take their own stair bracket kits
       if (system.id === 'statement' || system.id === 'pinnacle') {
         acc({
           section: S.railing,
           item: `${system.name} stair rail bracket kit`,
+          sku: `rail:${system.id}-stair-brackets`,
           detail: `${label} — 1 kit per stair section`,
           qty: 2 * stairBays,
           unit: 'ea',
@@ -673,9 +693,16 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
       const stairPost = resolvePost(system, rcfg.postOptionId, 'end')
       const midPosts = 2 * (stairBays - 1)
       const stairPostQty = (edgeRailed ? 2 : 4) + midPosts
+      const stairPostSku =
+        system.id === 'irx'
+          ? `rail:irx-post|${rcfg.heightIn === 36 ? '38.25' : '43.5'}|${rcfg.colorId}`
+          : system.compositeSteelPosts
+            ? 'rail:sleeve-ccs-4x4'
+            : `rail:${system.id}-sleeve-${rcfg.heightIn}|${rcfg.colorId}`
       acc({
         section: S.railing,
         item: `${stairPost.name} — ${rcfg.colorId}`,
+        sku: stairPostSku,
         detail: `${label} — stair rail ${edgeRailed ? 'bottom' : ''} posts${midPosts > 0 ? ` + ${midPosts} intermediates on the rake` : ''}`,
         qty: stairPostQty,
         unit: 'ea',
@@ -761,9 +788,12 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
       })
     }
     for (const o of plan.overlong) {
+      // lumber comes in 2' steps — the special order is the next even length up
+      const evenL = Math.ceil(o.lenFt / 2) * 2
       acc({
         section: p.section,
-        item: `${p.size} special length`,
+        item: `${p.size}-${evenL}' special order`,
+        sku: `lumber:${p.size}-${evenL}`,
         detail: `${o.label} — ${ftIn(o.lenFt)} exceeds stocked lengths`,
         qty: 1,
         unit: 'ea',
@@ -834,6 +864,7 @@ function railingBomForTier(
   const color = cfg.colorId
   const S6 = '6 — Railing'
   const irxHCable = system.id === 'irx' && inf.kind === 'cable-horizontal'
+  const irxTopKind = top.id === 'irx-modern' ? 'modern' : 'classic'
 
   // stock sections per equal bay (posts evenly spaced; sections cut down on site)
   const sectionCounts = new Map<number, number>()
@@ -850,7 +881,7 @@ function railingBomForTier(
       acc({
         section: S6,
         item: `${top.name} ${len}' — ${top.drinkRail ? 'panel cover' : color}`,
-        sku: top.drinkRail ? undefined : `rail:top|${topKey(top.id)}|${len}|${color}`,
+        sku: top.drinkRail ? `rail:ccs-drink-${len}|${color}` : `rail:top|${topKey(top.id)}|${len}|${color}`,
         detail: top.drinkRail && drinkBoardName ? `${tierName}: drink rail capped with ${drinkBoardName}` : `${tierName}: top rail`,
         qty: count,
         unit: 'ea',
@@ -861,12 +892,13 @@ function railingBomForTier(
       acc({
         section: S6,
         item: `IRX Horizontal Cable Rail Kit ${len}' — ${color}`,
+        sku: `rail:irx-hcable-kit-${len}|${color}`,
         detail: `${tierName}: center cable support + top channel + brackets (top rail separate)`,
         qty: count,
         unit: 'ea',
         note: cutNote,
       })
-      acc({ section: S6, item: `IRX ${top.name} ${len}' — ${color}`, detail: `${tierName}: top rail`, qty: count, unit: 'ea' })
+      acc({ section: S6, item: `IRX ${top.name} ${len}' — ${color}`, sku: `rail:irx-top-${irxTopKind}-${len}|${color}`, detail: `${tierName}: top rail`, qty: count, unit: 'ea' })
     } else if (system.id === 'irx') {
       const panelName =
         inf.kind === 'cable-vertical'
@@ -877,6 +909,12 @@ function railingBomForTier(
       acc({
         section: S6,
         item: `IRX ${panelName} ${len}' x ${cfg.heightIn}" — ${color}`,
+        sku:
+          inf.kind === 'glass'
+            ? `rail:irx-glass-${cfg.heightIn}x${len}|${color}`
+            : inf.kind === 'cable-vertical'
+              ? `rail:irx-vcable-${cfg.heightIn}x${len}|${color}`
+              : `rail:irx-panel-${cfg.heightIn}x${len}|${color}`,
         detail: `${tierName}: ${inf.name} (pre-assembled, top rail separate)`,
         qty: count,
         unit: 'ea',
@@ -885,6 +923,7 @@ function railingBomForTier(
       acc({
         section: S6,
         item: top.drinkRail ? `IRX Drink Rail panel cover + clip kit ${len}'` : `IRX ${top.name} ${len}' — ${color}`,
+        sku: top.drinkRail ? `rail:irx-drink-cover-${len}|${color}` : `rail:irx-top-${irxTopKind}-${len}|${color}`,
         detail: top.drinkRail && drinkBoardName ? `${tierName}: capped with ${drinkBoardName}` : `${tierName}: top rail w/ collars`,
         qty: count,
         unit: 'ea',
@@ -893,6 +932,7 @@ function railingBomForTier(
         acc({
           section: S6,
           item: 'IRX vertical-cable support kit',
+          sku: 'rail:irx-vcable-support',
           detail: `${tierName}: tensioning blocks + tool — 1 per panel; tension before securing posts`,
           qty: count,
           unit: 'ea',
@@ -904,6 +944,7 @@ function railingBomForTier(
         acc({
           section: S6,
           item: `IRX Universal Panel Cover ${len}' (open mid-rail) — ${color}`,
+          sku: `rail:irx-panel-cover-${len}|${color}`,
           detail: `${tierName}: the mid rail below the open band`,
           qty: count,
           unit: 'ea',
@@ -911,6 +952,7 @@ function railingBomForTier(
         acc({
           section: S6,
           item: `IRX unpunched support channel ${len}' (open mid-rail) — ${color}`,
+          sku: `rail:irx-channel-${len}|${color}`,
           detail: `${tierName}: carries the balusters under the mid rail`,
           qty: count,
           unit: 'ea',
@@ -920,19 +962,21 @@ function railingBomForTier(
       acc({
         section: S6,
         item: `${system.name} ${top.drinkRail ? 'rail panel (drink rail)' : 'rail kit'} ${len}' x ${cfg.heightIn}" — ${color}`,
+        sku: `rail:${system.id}-kit|${len}x${cfg.heightIn}|${color}`,
         detail: `${tierName}: ${inf.name}`,
         qty: count,
         unit: 'ea',
         note: cutNote,
       })
       if (top.drinkRail) {
-        acc({ section: S6, item: `${system.name} drink rail clip kit`, detail: `${tierName}: board-to-rail clips`, qty: count, unit: 'ea' })
+        acc({ section: S6, item: `${system.name} drink rail clip kit`, sku: `rail:${system.id}-drink-clips`, detail: `${tierName}: board-to-rail clips`, qty: count, unit: 'ea' })
       }
       // Statement / Pinnacle rail sections mount on bracket kits — one per section
       if (system.id === 'statement' || system.id === 'pinnacle') {
         acc({
           section: S6,
           item: `${system.name} rail bracket kit (4 brackets + screws)`,
+          sku: `rail:${system.id}-brackets`,
           detail: `${tierName}: 1 kit per straight level section`,
           qty: count,
           unit: 'ea',
@@ -946,6 +990,7 @@ function railingBomForTier(
         acc({
           section: S6,
           item: `Pinnacle Decorative Panel "${inf.id.includes('web') ? 'Square Web' : 'Chippendale Type 1'}" for ${cfg.heightIn}" rails`,
+          sku: `rail:pinnacle-panel|${inf.id.includes('web') ? 'square-web' : 'chippendale'}|${cfg.heightIn}`,
           detail: `${tierName}: ${perSection} per ${len}' section — panels replace the kit balusters; level sections only`,
           qty: count * perSection,
           unit: 'ea',
@@ -968,7 +1013,7 @@ function railingBomForTier(
         note: `Packs of ${packSize}.`,
       })
     } else if (inf.kind === 'glass') {
-      acc({ section: S6, item: `Glass channel kit 6' — ${color}`, detail: `${tierName}: tempered glass sourced locally`, qty: rl.sections, unit: 'ea' })
+      acc({ section: S6, item: `Glass channel kit 6' — ${color}`, sku: `rail:glass-channel-6|${color}`, detail: `${tierName}: tempered glass sourced locally`, qty: rl.sections, unit: 'ea' })
     } else if (inf.kind === 'cable-horizontal' && inf.cable) {
       // CableRail by Feeney: EACH SECTION is its own tensioned run
       const cables = inf.cable.cablesPerHeight[cfg.heightIn] ?? 9
@@ -981,6 +1026,7 @@ function railingBomForTier(
       acc({
         section: S6,
         item: `CableRail hardware kit ${cfg.heightIn}" (quick-connect + swivel fittings)`,
+        sku: `rail:feeney-kit-${cfg.heightIn}`,
         detail: `${tierName}: 1 kit per section — each section is an independent tensioned run of ${cables} cables`,
         qty: rl.sections,
         unit: 'ea',
@@ -988,6 +1034,7 @@ function railingBomForTier(
       acc({
         section: S6,
         item: `CableRail intermediate baluster ${cfg.heightIn}" + support block`,
+        sku: `rail:feeney-intermediate-${cfg.heightIn}`,
         detail: `${tierName}: 1 per 6' / 2 per 8' / 3 per 10' section`,
         qty: intermediates,
         unit: 'ea',
@@ -996,6 +1043,7 @@ function railingBomForTier(
       acc({
         section: S6,
         item: `CableRail 1/8" stainless cable — ${spool500 ? "500'" : "100'"} spool`,
+        sku: `rail:feeney-spool-${spool500 ? 500 : 100}`,
         detail: `${tierName}: ≈${Math.ceil(cableLf)} lf across ${rl.sections} sections`,
         qty: cableLf / (spool500 ? 500 : 100),
         unit: 'ea',
@@ -1022,6 +1070,7 @@ function railingBomForTier(
       acc({
         section: S6,
         item: `IRX cable kit ${kitLen}' (1 cable + stud, receiver & fast-receiver fittings, end caps)`,
+        sku: `rail:irx-cable-kit-${kitLen}`,
         detail: `${tierName}: ${cables} cables per run × ${totalRuns} run(s); kits cannot be cut into two runs`,
         qty: count,
         unit: 'ea',
@@ -1030,6 +1079,7 @@ function railingBomForTier(
     acc({
       section: S6,
       item: 'IRX intermediate cable support (cut to height)',
+      sku: 'rail:irx-cable-intermediate',
       detail: `${tierName}: 1 per opening, center of each post-to-post span`,
       qty: rl.sections,
       unit: 'ea',
@@ -1048,10 +1098,12 @@ function railingBomForTier(
     }
     const inline = Math.max(0, rl.posts - ends - corners)
     const h = cfg.heightIn === 36 ? '38"' : '43"'
-    acc({ section: S6, item: `IRX 3"x3" horizontal-cable END post kit ${h} — ${color}`, detail: `${tierName}: cable terminations (receiver / fast-receiver)`, qty: ends, unit: 'ea' })
-    if (inline > 0) acc({ section: S6, item: `IRX 3"x3" horizontal-cable INLINE post kit ${h} — ${color}`, detail: `${tierName}: cables pass through pre-drilled holes`, qty: inline, unit: 'ea' })
+    const hk = cfg.heightIn === 36 ? '38' : '43'
+    acc({ section: S6, item: `IRX 3"x3" horizontal-cable END post kit ${h} — ${color}`, sku: `rail:irx-hcable-post-end|${hk}|${color}`, detail: `${tierName}: cable terminations (receiver / fast-receiver)`, qty: ends, unit: 'ea' })
+    if (inline > 0)
+      acc({ section: S6, item: `IRX 3"x3" horizontal-cable INLINE post kit ${h} — ${color}`, sku: `rail:irx-hcable-post-inline|${hk}|${color}`, detail: `${tierName}: cables pass through pre-drilled holes`, qty: inline, unit: 'ea' })
     if (corners > 0)
-      acc({ section: S6, item: `IRX 3"x3" horizontal-cable 90° CORNER post kit (w/ insert) ${h} — ${color}`, detail: `${tierName}: cables turn corners inside the post`, qty: corners, unit: 'ea' })
+      acc({ section: S6, item: `IRX 3"x3" horizontal-cable 90° CORNER post kit (w/ insert) ${h} — ${color}`, sku: `rail:irx-hcable-post-corner|${hk}|${color}`, detail: `${tierName}: cables turn corners inside the post`, qty: corners, unit: 'ea' })
   } else {
     // count posts by role from the deduped placements (corners counted once)
     let lineCount = 0
@@ -1087,7 +1139,11 @@ function railingBomForTier(
     } else {
       const opt = selectedPostOption(system, cfg.postOptionId)
       const heightNote = system.post.sleeveOverWood && cfg.heightIn === 42 ? " (8' for 42\" rail)" : ''
-      acc({ section: S6, item: `${opt.name}${heightNote} — ${color}`, detail: `${tierName}: rail posts`, qty: total, unit: 'ea' })
+      const postSku =
+        system.id === 'irx'
+          ? `rail:irx-post|${cfg.heightIn === 36 ? '38.25' : '43.5'}|${color}`
+          : `rail:${system.id}-sleeve-${cfg.heightIn}|${color}`
+      acc({ section: S6, item: `${opt.name}${heightNote} — ${color}`, sku: postSku, detail: `${tierName}: rail posts`, qty: total, unit: 'ea' })
       if (opt.mount === 'sleeve') {
         acc({ section: S6, item: "4x4-8' PT post", sku: 'lumber:4x4-8', detail: `${tierName}: plumb/level structural post inside each sleeve`, qty: total, unit: 'ea' })
         acc({ section: S6, item: `${capName} + skirt`, sku: `rail:capskirt|${color}`, detail: `${tierName}: ${color}`, qty: total, unit: 'ea' })

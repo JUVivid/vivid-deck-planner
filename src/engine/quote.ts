@@ -54,6 +54,9 @@ export interface CategoryCost {
   labor: number | null
   tax: number
   jobCosts: number
+  /** order lines in this category with no price anywhere — they block the sell price */
+  unpriced: number
+  unpricedItems: string[]
   cost: number | null
   sell: number | null
 }
@@ -138,9 +141,15 @@ export function buildQuote(
   // ---------------- material cost, bucketed by customer category ----------------
   const mat = priceMaterials(bom)
   const material: Record<Cat, number> = { deck: 0, railing: 0, stairs: 0, lighting: 0, demo: 0 }
+  const unpricedBy: Record<Cat, string[]> = { deck: [], railing: [], stairs: [], lighting: [], demo: [] }
   for (const pl of mat.lines) {
-    if (pl.extended === null) continue
-    material[categoryOf(pl.line.section)] += pl.extended
+    if (pl.line.informational) continue
+    const cat = categoryOf(pl.line.section)
+    if (pl.extended === null) {
+      unpricedBy[cat].push(pl.line.item)
+      continue
+    }
+    material[cat] += pl.extended
   }
   if (q.materialsOverride !== null && mat.priced > 0) {
     // scale a manual override across the categories in the same proportions
@@ -202,8 +211,22 @@ export function buildQuote(
     // permits and engineered drawings are part of delivering the deck itself
     const jobCosts = id === 'deck' ? permit + drawings : 0
     const l = labor[id]
-    const cost = l === null ? null : cents(m + tax + l + jobCosts)
-    return { id, label: LABEL[id], material: m, labor: l, tax, jobCosts, cost, sell: cost === null ? null : uplift(cost) }
+    // a category holding unpriced material must never quote low — it shows
+    // "Pricing to follow" unless the rep took over with a materials override
+    const matPending = unpricedBy[id].length > 0 && q.materialsOverride === null
+    const cost = l === null || matPending ? null : cents(m + tax + l + jobCosts)
+    return {
+      id,
+      label: LABEL[id],
+      material: m,
+      labor: l,
+      tax,
+      jobCosts,
+      unpriced: unpricedBy[id].length,
+      unpricedItems: unpricedBy[id],
+      cost,
+      sell: cost === null ? null : uplift(cost),
+    }
   })
   const catById = (id: Cat) => byCategory.find((c) => c.id === id)!
 

@@ -1152,6 +1152,19 @@ hr {
   border-left-color: #c9a86a;
   color: #ded6c4;
 }
+.q-unpriced-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.q-unpriced-list li {
+  margin: 2px 0;
+}
+.q-unpriced-flag {
+  color: #e0a94e;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .q-internal .q-fine {
   margin: 10px 0 0;
   color: #8d836e !important;
