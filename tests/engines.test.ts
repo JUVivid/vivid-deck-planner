@@ -120,14 +120,22 @@ describe('framing engine — 16x12 ledger deck, SP 2x8 @ 16, (2)2x10, 1ft cantil
     // every joist still reaches two real bearings (ledger + beam)
     expect(fr.notes.some((n) => n.includes('fewer than two bearings'))).toBe(false)
   })
-  it('hangs both ends when the far support is a FLUSH beam (in the joist plane)', () => {
+  it('flush rim hangs joist ends; an INTERIOR girder always drops (ties)', () => {
     const p = rectDeck(16, 12)
     p.tiers[0].framing.beamStyle = 'flush'
     p.tiers[0].framing.cantilever = 0
     const f2 = [...computeProject(p).byTier.values()][0].framing
-    // flush beam carries the joist on its face → hanger, and no ties anywhere
+    // 12' deep on 2x8 → interior girder @6 + rim girder @12
+    const rim = f2.beams.find((b) => Math.abs(b.v - 12) < 0.1)!
+    const interior = f2.beams.find((b) => Math.abs(b.v - 6) < 0.1)!
+    // only the rim can set flush — joist ends hang on its face
+    expect(rim.style).toBe('flush')
     expect(f2.hangers.length).toBeGreaterThan(f2.bandEnds.length)
-    expect(f2.ties.length).toBe(0)
+    // joists RUN OVER the interior girder — it must drop, joists tie to it
+    expect(interior.style).toBe('drop')
+    expect(f2.ties.length).toBeGreaterThan(0)
+    // and the drop girder's posts are one joist-depth shorter than the rim's
+    expect(interior.postTopFt).toBeCloseTo(rim.postTopFt - 7.25 / 12, 2)
   })
   it('passes joist-span and cantilever compliance', () => {
     const joist = computed.checks.find((c) => c.id.startsWith('joist-'))
@@ -546,17 +554,34 @@ describe('auto-framing (company standard — the program decides)', () => {
     expect(max.tiers[0].framing.spacing).toBe(24)
   })
 
-  it('runs joists perpendicular to the ledger; freestanding spans the short way', async () => {
+  it('the DECKING DIRECTION governs the joists — the framing rotates with the boards', async () => {
     const { autoFrameTier } = await import('../src/engine/autoframe')
-    // ledger on the EAST edge (vertical) → joists must run E–W (0)
+    // boards E–W (default) → joists N–S, whatever wall the ledger is on
     const p = rectDeck()
-    p.tiers[0].edges[0].ledger = false
-    p.tiers[0].edges[1].ledger = true
+    autoFrameTier(p.tiers[0])
+    expect(p.tiers[0].framing.joistDir).toBe(90)
+    // rep flips the boards N–S → the WHOLE frame rotates: joists E–W
+    p.tiers[0].decking.angle = 90
     autoFrameTier(p.tiers[0])
     expect(p.tiers[0].framing.joistDir).toBe(0)
-    // freestanding 16 wide x 12 deep → span the 12' direction (N–S)
+    // …and the deck still frames legally: joists now run parallel to the house
+    // wall, so it frames on beams (freestanding style) with a clear note and
+    // NO error — every joist crosses the boards
+    const c = computeProject(p)
+    const fr = [...c.byTier.values()][0].framing
+    expect(fr.errors).toEqual([])
+    expect(fr.freestanding).toBe(true)
+    expect(fr.notes.join(' ')).toMatch(/parallel to the wall/)
+    expect(c.checks.filter((x) => x.level === 'fail')).toEqual([])
+    // diagonal boards: either direction works → perpendicular to the ledger
+    const diag = rectDeck()
+    diag.tiers[0].decking.angle = 45
+    autoFrameTier(diag.tiers[0])
+    expect(diag.tiers[0].framing.joistDir).toBe(90)
+    // freestanding diagonal 16 wide x 12 deep → span the 12' direction (N–S)
     const free = rectDeck()
     free.tiers[0].edges[0].ledger = false
+    free.tiers[0].decking.angle = 45
     autoFrameTier(free.tiers[0])
     expect(free.tiers[0].framing.joistDir).toBe(90)
   })
@@ -579,6 +604,25 @@ describe('auto-framing (company standard — the program decides)', () => {
     p.tiers[0].framing.cantilever = 0
     autoFrameTier(p.tiers[0])
     expect(p.tiers[0].framing.beamStyle).toBe('flush')
+  })
+
+  it('knee braces are 6x6 stock sized by the engine — never a fixed 2x6', async () => {
+    const { autoFrameAll } = await import('../src/engine/autoframe')
+    const p = rectDeck(16, 10, 7.5) // tall deck → posts past the brace threshold
+    autoFrameAll(p)
+    const c = computeProject(p)
+    const fr = [...c.byTier.values()][0].framing
+    expect(fr.bracingRequired).toBe(true)
+    expect(fr.braceCount).toBe(fr.posts.length * 2)
+    expect(fr.braceLegFt).toBeGreaterThan(1.4)
+    expect(fr.braceLegFt).toBeLessThanOrEqual(3)
+    // ordered as real 6x6 cuts (45° hypotenuse + trim), pooled with the posts
+    const plan = c.cutPlans.find((x) => x.size === '6x6')!
+    const braceCuts = plan.boards.flatMap((b) => b.cuts).filter((x) => x.label.includes('knee braces'))
+    expect(braceCuts.length).toBe(fr.braceCount)
+    expect(braceCuts[0].lenFt).toBeCloseTo(fr.braceLegFt * Math.SQRT2 + 0.5, 3)
+    // the old fixed 2x6 brace line is gone
+    expect(c.bom.some((l) => l.item.includes('2x6') && l.item.toLowerCase().includes('brace'))).toBe(false)
   })
 
   it('upgrades to 2x10 joists BEFORE adding an interior girder', async () => {

@@ -127,19 +127,18 @@ export function renderElevation(
       ctx.fillStyle = '#a97142'
       ctx.fillRect(X(sx) - wd / 2, Y(post.heightFt), wd, post.heightFt * scale)
     }
-    // flush beams sit in the joist plane — draw here (behind the fascia band)
-    const flush = tier.framing.beamStyle === 'flush'
-    if (flush) {
-      for (const bm of fr.beams) {
-        const a = dot(bm.seg.a, basis.right)
-        const b = dot(bm.seg.b, basis.right)
-        const lo = Math.min(a, b)
-        const hi = Math.max(a, b)
-        ctx.fillStyle = '#d99b52'
-        ctx.strokeStyle = '#b97f28'
-        ctx.fillRect(X(lo), Y(fr.postTopFt + beamD), (hi - lo) * scale, beamD * scale)
-        ctx.strokeRect(X(lo), Y(fr.postTopFt + beamD), (hi - lo) * scale, beamD * scale)
-      }
+    // flush beams sit in the joist plane — draw here (behind the fascia band);
+    // style is PER BEAM: an interior girder drops even on a flush-rim deck
+    for (const bm of fr.beams) {
+      if (bm.style !== 'flush') continue
+      const a = dot(bm.seg.a, basis.right)
+      const b = dot(bm.seg.b, basis.right)
+      const lo = Math.min(a, b)
+      const hi = Math.max(a, b)
+      ctx.fillStyle = '#d99b52'
+      ctx.strokeStyle = '#b97f28'
+      ctx.fillRect(X(lo), Y(bm.postTopFt + beamD), (hi - lo) * scale, beamD * scale)
+      ctx.strokeRect(X(lo), Y(bm.postTopFt + beamD), (hi - lo) * scale, beamD * scale)
     }
     // joist band + decking band
     ctx.fillStyle = '#ded7c8'
@@ -193,33 +192,35 @@ export function renderElevation(
       }
     }
 
-    // drop beams — set back from the rim and BELOW the joists, so they read below
-    // the 12" fascia. Drawn ON TOP of the fascia (the fascia only covers the band).
-    if (!flush) {
-      for (const bm of fr.beams) {
-        const a = dot(bm.seg.a, basis.right)
-        const b = dot(bm.seg.b, basis.right)
-        const lo = Math.min(a, b)
-        const hi = Math.max(a, b)
-        ctx.fillStyle = '#e9b36a'
-        ctx.strokeStyle = '#b97f28'
-        ctx.lineWidth = 0.8
-        ctx.fillRect(X(lo), Y(fr.postTopFt + beamD), (hi - lo) * scale, beamD * scale)
-        ctx.strokeRect(X(lo), Y(fr.postTopFt + beamD), (hi - lo) * scale, beamD * scale)
-      }
+    // drop beams — BELOW the joists (interior girders always draw here, plus
+    // the rim girder when a cantilever drops it). Drawn on top of the fascia.
+    for (const bm of fr.beams) {
+      if (bm.style !== 'drop') continue
+      const a = dot(bm.seg.a, basis.right)
+      const b = dot(bm.seg.b, basis.right)
+      const lo = Math.min(a, b)
+      const hi = Math.max(a, b)
+      ctx.fillStyle = '#e9b36a'
+      ctx.strokeStyle = '#b97f28'
+      ctx.lineWidth = 0.8
+      ctx.fillRect(X(lo), Y(bm.postTopFt + beamD), (hi - lo) * scale, beamD * scale)
+      ctx.strokeRect(X(lo), Y(bm.postTopFt + beamD), (hi - lo) * scale, beamD * scale)
     }
 
-    // diagonal knee bracing — braces stay within the beam span (never into space)
-    if (fr.bracingRequired) {
-      ctx.strokeStyle = '#7a5a2e'
-      ctx.lineWidth = Math.max(1.5, (1.5 / 12) * scale)
-      const braceFt = Math.min(2, fr.postTopFt * 0.4)
-      const beamBottomY = fr.postTopFt
+    // diagonal 6x6 knee braces — drawn TO SCALE: a 5.5"-thick member at 45°
+    // from the post face to the beam underside, leg length from the engine so
+    // the drawing cross-checks the order
+    if (fr.bracingRequired && fr.braceLegFt > 0) {
+      const braceFt = fr.braceLegFt
+      ctx.strokeStyle = '#a97142'
+      ctx.lineCap = 'butt'
+      ctx.lineWidth = Math.max(2, (5.5 / 12) * scale)
       for (const bm of fr.beams) {
         const ba = dot(bm.seg.a, basis.right)
         const bb = dot(bm.seg.b, basis.right)
         const blo = Math.min(ba, bb)
         const bhi = Math.max(ba, bb)
+        const beamBottomY = bm.postTopFt
         for (const post of bm.posts) {
           const sx = dot(post, basis.right)
           for (const d of [-1, 1]) {

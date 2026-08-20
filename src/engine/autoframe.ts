@@ -22,8 +22,9 @@ const sizeMemo = new Map<string, '2x8' | '2x10'>()
  *     as the spans require, so depth never makes this non-compliant
  *   • joist spacing = the maximum the selected decking allows
  *     (16" oc perpendicular, 12" oc diagonal, 24" for MAX boards)
- *   • joists run perpendicular to the ledger (they must bear on it); on a
- *     freestanding deck they span the shorter direction
+ *   • the DECKING DIRECTION governs the joists (boards must cross the
+ *     framing); diagonal boards fall back to perpendicular-to-ledger, or the
+ *     shorter span when freestanding
  *
  * The ONE knob a rep keeps is the cantilever (clamped to a sane range).
  * Standardising the assembly is deliberate: one hanger SKU, one beam recipe,
@@ -47,31 +48,42 @@ export function autoFrameTier(tier: Tier): void {
   )
   f.beamStyle = f.cantilever > 0 ? 'drop' : 'flush'
 
-  // joists run perpendicular to the (longest) ledger edge; freestanding decks
-  // span the shorter footprint direction
-  const n = tier.outline.length
-  let bestLedgerLen = 0
-  let ledgerDir: 0 | 90 | null = null
-  for (let i = 0; i < n; i++) {
-    if (!tier.edges[i]?.ledger) continue
-    const a = tier.outline[i]
-    const b = tier.outline[(i + 1) % n]
-    const dx = Math.abs(b.x - a.x)
-    const dy = Math.abs(b.y - a.y)
-    const len = Math.hypot(dx, dy)
-    if (len <= bestLedgerLen) continue
-    bestLedgerLen = len
-    // horizontal ledger (runs E–W) → joists run N–S (90)
-    ledgerDir = dx >= dy ? 90 : 0
-  }
-  if (ledgerDir !== null) {
-    f.joistDir = ledgerDir
+  // THE DECKING DIRECTION GOVERNS THE JOISTS — boards must run across the
+  // framing, so when a rep turns the boards, the whole structure turns with
+  // them (joists, beams, posts, footings all recompute):
+  //   boards E–W (0)  → joists N–S (90)
+  //   boards N–S (90) → joists E–W (0)
+  //   diagonal (45)   → either works; run perpendicular to the (longest)
+  //                     ledger edge, or span the shorter footprint direction
+  if (tier.decking.angle === 0) {
+    f.joistDir = 90
+  } else if (tier.decking.angle === 90) {
+    f.joistDir = 0
   } else {
-    const xs = tier.outline.map((p) => p.x)
-    const ys = tier.outline.map((p) => p.y)
-    const xExt = Math.max(...xs) - Math.min(...xs)
-    const yExt = Math.max(...ys) - Math.min(...ys)
-    f.joistDir = yExt <= xExt ? 90 : 0
+    const n = tier.outline.length
+    let bestLedgerLen = 0
+    let ledgerDir: 0 | 90 | null = null
+    for (let i = 0; i < n; i++) {
+      if (!tier.edges[i]?.ledger) continue
+      const a = tier.outline[i]
+      const b = tier.outline[(i + 1) % n]
+      const dx = Math.abs(b.x - a.x)
+      const dy = Math.abs(b.y - a.y)
+      const len = Math.hypot(dx, dy)
+      if (len <= bestLedgerLen) continue
+      bestLedgerLen = len
+      // horizontal ledger (runs E–W) → joists run N–S (90)
+      ledgerDir = dx >= dy ? 90 : 0
+    }
+    if (ledgerDir !== null) {
+      f.joistDir = ledgerDir
+    } else {
+      const xs = tier.outline.map((p) => p.x)
+      const ys = tier.outline.map((p) => p.y)
+      const xExt = Math.max(...xs) - Math.min(...xs)
+      const yExt = Math.max(...ys) - Math.min(...ys)
+      f.joistDir = yExt <= xExt ? 90 : 0
+    }
   }
 
   // ---- joist size: upgrade to 2x10 BEFORE adding an interior beam line ----

@@ -37,12 +37,22 @@ export interface Beam {
   postSpacing: number
   allowablePostSpacing: number
   beyondTable: boolean
+  /**
+   * Per-beam construction. Only a beam AT the outer rim can set flush (in the
+   * joist plane, joists hung on its face). An INTERIOR girder always drops
+   * below the joists — they bear over it and keep running.
+   */
+  style: 'drop' | 'flush'
+  /** ft, top of this beam's posts (underside of the beam) */
+  postTopFt: number
 }
 
 export interface Post {
   p: Pt
   /** ft, top of post above grade (underside of beam bearing) */
   heightFt: number
+  /** construction of the beam this post carries (selects the post cap) */
+  beamStyle: 'drop' | 'flush'
 }
 
 export interface Footing {
@@ -109,6 +119,8 @@ export interface FramingResult {
   bracingRequired: boolean
   /** number of diagonal braces to order (≈2 per post) */
   braceCount: number
+  /** ft, horizontal/vertical leg of each 45° knee brace (6x6 stock) */
+  braceLegFt: number
 }
 
 const emptyResult = (): FramingResult => ({
@@ -142,6 +154,7 @@ const emptyResult = (): FramingResult => ({
   postTooShort: false,
   bracingRequired: false,
   braceCount: 0,
+  braceLegFt: 0,
 })
 
 /** Post height (ft) above which diagonal/knee bracing is required. */
@@ -205,12 +218,21 @@ export function computeFraming(
 
   // ---- ledger edges ----
   const ledgerIdx: number[] = []
+  let parallelLedger = false
   for (let i = 0; i < poly.length; i++) {
     if (!tier.edges[i]?.ledger) continue
     const a = poly[i]
     const b = poly[(i + 1) % poly.length]
     const dir = norm(sub(b, a))
-    if (Math.abs(dot(dir, v)) > 0.01) {
+    const along = Math.abs(dot(dir, v))
+    if (along > 0.95) {
+      // joists deliberately run PARALLEL to this house wall (the decking
+      // direction governs the joists) — the wall can't carry joist ends, so
+      // this side frames on a beam instead. Not an error; it's the build.
+      parallelLedger = true
+      continue
+    }
+    if (along > 0.01) {
       r.errors.push(
         `Ledger edge ${i + 1} is not perpendicular to the joists — joists must run away from the house wall. It is being ignored for framing.`,
       )
@@ -221,6 +243,11 @@ export function computeFraming(
     r.ledgerLen += Math.hypot(b.x - a.x, b.y - a.y)
   }
   r.freestanding = ledgerIdx.length === 0
+  if (parallelLedger && r.freestanding) {
+    r.notes.push(
+      'Boards run perpendicular to the house, so the joists run parallel to the wall — the deck frames on beams (freestanding style) with a beam line at the house side. The wall attachment is lateral only.',
+    )
+  }
 
   let ledgerV: number | null = null
   if (!r.freestanding) {
@@ -375,10 +402,11 @@ export function computeFraming(
   const deckThk = resolveDecking(tier).profile.thickIn / 12
   const joistD = DEPTH_IN[f.joistSize] / 12
   const beamD = DEPTH_IN[f.beamSize] / 12
-  const postTop =
-    f.beamStyle === 'drop' ? tier.height - deckThk - joistD - beamD : tier.height - deckThk - beamD
-  r.postTopFt = Math.max(0, postTop)
-  r.postTooShort = postTop < 0.2
+  // per-STYLE post tops: a drop girder sits below the joists, a flush girder in
+  // their plane. Style is decided per beam — an interior girder must drop even
+  // when the rim girder is flush.
+  const postTopDrop = tier.height - deckThk - joistD - beamD
+  const postTopFlush = tier.height - deckThk - beamD
 
   interface RawBeam {
     v: number
@@ -386,6 +414,8 @@ export function computeFraming(
     b: number // u-range
     backspan: number
     cant: number
+    /** the beam line sits at the zone's outer rim (only there can it set flush) */
+    atRim: boolean
   }
   const raw: RawBeam[] = []
   for (const z of zones) {
@@ -396,8 +426,9 @@ export function computeFraming(
       // a line collinear with a polygon edge is degenerate and can drop the
       // beam entirely. Clip a hair inside the outline; the beam keeps its
       // true plane (bv) for hangers, elevation and the BOM.
+      const atRim = Math.abs(bv - z.farV) < 0.05
       let clipV = bv
-      if (Math.abs(bv - z.farV) < 0.05) clipV = bv - dirSign * 0.02
+      if (atRim) clipV = bv - dirSign * 0.02
       if (Math.abs(bv - nearV) < 0.05) clipV = bv + dirSign * 0.02
       const segs = clipLineToPoly(poly, mul(v, clipV), u)
       for (const s of segs) {
@@ -406,7 +437,7 @@ export function computeFraming(
         const lo = Math.max(Math.min(sa, sb), zLo)
         const hi = Math.min(Math.max(sa, sb), zHi)
         if (hi - lo < 0.3) continue
-        raw.push({ v: bv, a: lo, b: hi, backspan: z.backspan, cant: z.cant })
+        raw.push({ v: bv, a: lo, b: hi, backspan: z.backspan, cant: z.cant, atRim })
       }
     }
   }
@@ -419,6 +450,7 @@ export function computeFraming(
       last.b = Math.max(last.b, rb.b)
       last.backspan = Math.max(last.backspan, rb.backspan)
       last.cant = Math.max(last.cant, rb.cant)
+      last.atRim = last.atRim && rb.atRim
     } else {
       mergedBeams.push({ ...rb })
     }
@@ -442,6 +474,7 @@ export function computeFraming(
       const tFt = nPosts === 1 ? lenB / 2 : endInset + usable * (k / (nPosts - 1))
       posts.push(add(a, mul(dirU, tFt)))
     }
+    const style: 'drop' | 'flush' = f.beamStyle === 'flush' && rb.atRim ? 'flush' : 'drop'
     r.beams.push({
       seg: { a, b },
       v: rb.v,
@@ -450,6 +483,8 @@ export function computeFraming(
       postSpacing: nPosts > 1 ? usable / (nPosts - 1) : lenB,
       allowablePostSpacing: allow,
       beyondTable,
+      style,
+      postTopFt: Math.max(0, style === 'drop' ? postTopDrop : postTopFlush),
     })
     if (beyondTable) {
       r.notes.push('A beam carries joists spanning beyond the table range (18 ft) — engineered design required.')
@@ -473,7 +508,7 @@ export function computeFraming(
     const outer = isOutermost ? r.cantilever + (r.freestanding ? 0 : 0) : r.maxBackspan / 2
     const tribV = Math.max(0.5, inner + outer)
     for (const p of bm.posts) {
-      r.posts.push({ p, heightFt: r.postTopFt })
+      r.posts.push({ p, heightFt: bm.postTopFt, beamStyle: bm.style })
       const trib = Math.max(2, bm.postSpacing) * tribV
       const areaReq = (trib * loadPsf) / settings.soilBearing // sq ft
       let diaIn = Math.ceil((Math.sqrt(areaReq / Math.PI) * 2 * 12) / 2) * 2
@@ -487,9 +522,15 @@ export function computeFraming(
     }
   }
 
-  // ---- lateral bracing (diagonal knee braces) above the height threshold ----
+  // post-top summary comes from the actual posts (styles can mix on one deck)
+  r.postTopFt = r.posts.length > 0 ? Math.max(...r.posts.map((p) => p.heightFt)) : Math.max(0, postTopDrop)
+  r.postTooShort = r.beams.some((bm) => (bm.style === 'drop' ? postTopDrop : postTopFlush) < 0.2)
+
+  // ---- lateral bracing (diagonal 6x6 knee braces) above the height threshold ----
   r.bracingRequired = r.posts.length > 0 && (r.postTopFt > BRACE_HEIGHT_FT || (r.freestanding && r.postTopFt > 2))
   r.braceCount = r.bracingRequired ? r.posts.length * 2 : 0
+  // 45° braces: leg grows with the post, clamped to buildable stock
+  r.braceLegFt = r.bracingRequired ? Math.min(3, Math.max(1.5, r.postTopFt * 0.4)) : 0
 
   // ---- hangers, ties & band ends ----
   // A connector is ordered for what a joist end actually DOES:
@@ -531,17 +572,14 @@ export function computeFraming(
       const bu1 = Math.max(posU(bm.seg.a), posU(bm.seg.b))
       if (ju < bu0 - 0.05 || ju > bu1 + 0.05) continue
       if (bm.v > jv0 + 0.05 && bm.v < jv1 - 0.05) {
+        // joist runs OVER this beam — only a drop girder can do that
         const pt = add(mul(u, ju), mul(v, bm.v))
         bearings++
-        if (f.beamStyle === 'drop') r.ties.push(pt)
-        else {
-          r.hangers.push(pt)
-          if (Math.abs(bm.v - (dirSign > 0 ? jv1 : jv0)) > 0.3) r.hangers.push(pt) // interior flush beam: joists spliced, 2 hangers
-        }
+        r.ties.push(pt)
       } else if (Math.abs(bm.v - jv0) <= 0.05 || Math.abs(bm.v - jv1) <= 0.05) {
         const pt = add(mul(u, ju), mul(v, bm.v))
         bearings++
-        if (f.beamStyle === 'drop') r.ties.push(pt)
+        if (bm.style === 'drop') r.ties.push(pt)
         else r.hangers.push(pt)
       }
     }
@@ -566,7 +604,7 @@ export function computeFraming(
   // ---- blocking rows: over drop beams + rows so no span exceeds ~6' ----
   // (TimberTech install guides: solid wood blocking between joists every 4'–6')
   const blockVs: number[] = []
-  if (f.beamStyle === 'drop') for (const bm of r.beams) blockVs.push(bm.v)
+  for (const bm of r.beams) if (bm.style === 'drop') blockVs.push(bm.v)
   const MAX_BLOCK_GAP = 6
   for (const z of zones) {
     const supports = r.freestanding ? [...z.beamVs] : [nearV, ...z.beamVs]

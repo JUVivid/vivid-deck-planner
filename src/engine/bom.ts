@@ -255,7 +255,7 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
 
     // ---- beams ----
     for (const bm of fr.beams) {
-      cut(S.framing, sp, f.beamSize, bm.len, `${tier.name} beam plies, ${f.beamPly}-ply ${f.beamStyle} beam`, f.beamPly)
+      cut(S.framing, sp, f.beamSize, bm.len, `${tier.name} beam plies, ${f.beamPly}-ply ${bm.style} beam`, f.beamPly)
       // multi-ply beams are laminated: 2 rows of structural screws @ ~16" oc
       beamLaminationLf += bm.len * (f.beamPly - 1)
       if (f.beamPly === 2) tapeDoubleLf += bm.len
@@ -273,27 +273,32 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
 
     // ---- posts ----
     if (fr.posts.length > 0) {
-      cut(S.framing, sp, '6x6', fr.postTopFt + 0.5, `${tier.name} support posts`, fr.posts.length)
+      // each post is its own cut at ITS beam's underside (drop girders sit
+      // lower than flush girders — the heights can differ on one deck)
+      for (const post of fr.posts) cut(S.framing, sp, '6x6', post.heightFt + 0.5, `${tier.name} support posts`)
       acc({ section: S.hardware, item: 'ABA66Z post base', sku: 'hw:aba66z', detail: `${tier.name} standoff post base`, qty: fr.posts.length, unit: 'ea' })
       // each post base sets on a 1/2" anchor in the footing (per Vivid's standard detail)
       acc({ section: S.hardware, item: '1/2" x 5-1/2" concrete anchor bolt + washer', sku: 'hw:anchor-bolt', detail: `${tier.name} post-base anchors`, qty: fr.posts.length, unit: 'ea' })
-      acc({
-        section: S.hardware,
-        item: f.beamStyle === 'drop' ? 'BCS2-3/6 post cap' : 'LCE/AC post cap',
-        sku: f.beamStyle === 'drop' ? 'hw:bcs2' : 'hw:lce4',
-        detail: `${tier.name} post-to-beam connection`,
-        qty: fr.posts.length,
-        unit: 'ea',
-      })
-      // lateral / diagonal knee bracing above the height threshold
+      // post caps follow each post's beam construction
+      const dropPosts = fr.posts.filter((p) => p.beamStyle === 'drop').length
+      const flushPosts = fr.posts.length - dropPosts
+      if (dropPosts > 0) {
+        acc({ section: S.hardware, item: 'BCS2-3/6 post cap', sku: 'hw:bcs2', detail: `${tier.name} post-to-beam connection (drop girders)`, qty: dropPosts, unit: 'ea' })
+      }
+      if (flushPosts > 0) {
+        acc({ section: S.hardware, item: 'LCE/AC post cap', sku: 'hw:lce4', detail: `${tier.name} post-to-beam connection (flush girder)`, qty: flushPosts, unit: 'ea' })
+      }
+      // lateral / diagonal 6x6 knee bracing above the height threshold
       if (fr.bracingRequired && fr.braceCount > 0) {
-        acc({
-          section: S.framing,
-          item: '2x6-8\' PT diagonal brace',
-          detail: `${tier.name} knee bracing — posts ${ftIn(fr.postTopFt)} tall (≈2 per post)`,
-          qty: fr.braceCount,
-          unit: 'ea',
-        })
+        const braceLen = fr.braceLegFt * Math.SQRT2 + 0.5 // 45° brace + cut trim
+        cut(
+          S.framing,
+          sp,
+          '6x6',
+          braceLen,
+          `${tier.name} 6x6 knee braces @ 45° — posts ${ftIn(fr.postTopFt)} tall (≈2 per post)`,
+          fr.braceCount,
+        )
         acc({
           section: S.hardware,
           item: '1/2" x 6" carriage bolts (brace)',
@@ -314,7 +319,7 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
         section: S.hardware,
         item: `${HANGER_NAME[f.joistSize]} joist hanger`,
         sku: `hw:hanger-${f.joistSize}`,
-        detail: `${tier.name} joist hangers — ledger${f.beamStyle === 'flush' ? ' + flush-beam' : ''} bearings`,
+        detail: `${tier.name} joist hangers — ledger${fr.beams.some((b) => b.style === 'flush') ? ' + flush-beam' : ''} bearings`,
         qty: hangerQty,
         unit: 'ea',
       })
