@@ -510,6 +510,19 @@ export interface RailInfill {
   incompatibleTops: string[]
   note?: string
   cable?: CableSpec
+  /**
+   * Kit limit shorter than the system's sections — glass channel/panel kits
+   * only come 6', so glass runs take closer post spacing than balusters.
+   */
+  maxSectionFt?: number
+}
+
+/** Post cap + skirt accessory offering for a railing system. */
+export interface PostAccessory {
+  caps: { id: string; name: string }[]
+  skirt: boolean
+  /** true = every post kit ships with its cap and skirt (nothing extra to order) */
+  integral?: boolean
 }
 
 export type PostMount = 'sleeve' | 'aluminum' | 'steel' | 'surface-mount'
@@ -539,6 +552,8 @@ export interface RailingSystem {
   post: { name: string; sizeIn: number; sleeveOverWood: boolean }
   /** selectable post sizes; when >1 the UI shows a menu. First = default. */
   postOptions: PostOption[]
+  /** post cap + skirt offering (2026 guide); absent = none catalogued */
+  postAccessory?: PostAccessory
   /**
    * Composite systems: with top-mount installs the interior ("line") posts are
    * steel surface-mount posts (never 4x4 wood). End/corner posts still mount to
@@ -578,6 +593,7 @@ export const RAILING_SYSTEMS: RailingSystem[] = [
     ],
     post: { name: '5" sq PVC post sleeve (3/8" wall) over 4x4', sizeIn: 5, sleeveOverWood: true },
     postOptions: [{ id: 'pvc5', label: '5" sq PVC sleeve', sizeIn: 5, mount: 'sleeve', name: '5" sq PVC post sleeve (3/8" wall) over 4x4' }],
+    postAccessory: { caps: [{ id: 'flat', name: 'Plain Flat Post Cap' }], skirt: true },
     compositeSteelPosts: false,
     bottomRail: { heightIn: 1.75, gapIn: 3 },
     gates: true,
@@ -601,6 +617,7 @@ export const RAILING_SYSTEMS: RailingSystem[] = [
     ],
     post: { name: '5" sq PVC post sleeve (3/8" wall) over 4x4', sizeIn: 5, sleeveOverWood: true },
     postOptions: [{ id: 'pvc5', label: '5" sq PVC sleeve', sizeIn: 5, mount: 'sleeve', name: '5" sq PVC post sleeve (3/8" wall) over 4x4' }],
+    postAccessory: { caps: [{ id: 'flat', name: 'Plain Flat Post Cap' }], skirt: true },
     compositeSteelPosts: false,
     bottomRail: { heightIn: 1.75, gapIn: 3 },
     gates: true,
@@ -626,7 +643,7 @@ export const RAILING_SYSTEMS: RailingSystem[] = [
       { id: 'comp-bal', name: 'Square Composite Balusters', kind: 'baluster', balustersPer: { 6: 13, 8: 18, 10: 23 }, memberWidthIn: 1.4, incompatibleTops: [] },
       { id: 'round-al', name: 'Round Aluminum Balusters', kind: 'baluster', balustersPer: { 6: 15, 8: 20, 10: 25 }, memberWidthIn: 0.75, incompatibleTops: [] },
       { id: 'square-al', name: 'Square Aluminum Balusters', kind: 'baluster', balustersPer: { 6: 15, 8: 20, 10: 25 }, memberWidthIn: 0.75, incompatibleTops: [] },
-      { id: 'glass', name: 'Glass Panel (channel kit, glass local)', kind: 'glass', balustersPer: {}, memberWidthIn: 0, incompatibleTops: ['cc-drink'], note: '6\' channel kits; tempered glass sourced locally.' },
+      { id: 'glass', name: 'Glass Panel (channel kit, glass local)', kind: 'glass', balustersPer: {}, memberWidthIn: 0, incompatibleTops: ['cc-drink'], note: '6\' channel kits; tempered glass sourced locally.', maxSectionFt: 6 },
       {
         id: 'cable',
         name: 'CableRail by Feeney (stainless, horizontal)',
@@ -650,6 +667,7 @@ export const RAILING_SYSTEMS: RailingSystem[] = [
       { id: 'sl55', label: '5.5x5.5 sleeve (45° cuts)', sizeIn: 5.5, mount: 'sleeve', name: '5.5x5.5 post sleeve' },
       { id: 'sl6', label: '6x6 sleeve', sizeIn: 6, mount: 'sleeve', name: '6x6 post sleeve' },
     ],
+    postAccessory: { caps: [{ id: 'cap', name: 'Post Cap' }, { id: 'island', name: 'Island Cap' }], skirt: true },
     compositeSteelPosts: true,
     bottomRail: { heightIn: 1.75, gapIn: 2.75 },
     gates: true,
@@ -680,6 +698,7 @@ export const RAILING_SYSTEMS: RailingSystem[] = [
       { id: 'sl5', label: '5x5 sleeve', sizeIn: 5, mount: 'sleeve', name: '5x5 post sleeve' },
       { id: 'sl55', label: '5.5x5.5 sleeve (45° cuts)', sizeIn: 5.5, mount: 'sleeve', name: '5.5x5.5 post sleeve' },
     ],
+    postAccessory: { caps: [{ id: 'cap', name: 'Post Cap' }], skirt: true },
     compositeSteelPosts: true,
     bottomRail: { heightIn: 1.75, gapIn: 3 },
     gates: false,
@@ -702,7 +721,7 @@ export const RAILING_SYSTEMS: RailingSystem[] = [
     ],
     infills: [
       { id: 'al-bal', name: 'Aluminum Baluster Panel', kind: 'baluster', balustersPer: { 6: 15, 8: 20 }, memberWidthIn: 0.75, incompatibleTops: [] },
-      { id: 'glass', name: 'Universal Glass Panel Kit (1/4" tempered, local)', kind: 'glass', balustersPer: {}, memberWidthIn: 0, incompatibleTops: ['irx-drink'] },
+      { id: 'glass', name: 'Universal Glass Panel Kit (1/4" tempered, local)', kind: 'glass', balustersPer: {}, memberWidthIn: 0, incompatibleTops: ['irx-drink'], maxSectionFt: 6 },
       { id: 'open-mid', name: 'Balusters with Open Mid-Rail', kind: 'open-mid', balustersPer: { 6: 15, 8: 20 }, memberWidthIn: 0.75, incompatibleTops: ['irx-drink'] },
       {
         id: 'v-cable',
@@ -741,6 +760,7 @@ export const RAILING_SYSTEMS: RailingSystem[] = [
       { id: 'al3', label: '3" aluminum post', sizeIn: 3, mount: 'aluminum', name: '3" aluminum post kit (post + cap + skirt)' },
       { id: 'al4', label: '4" aluminum post', sizeIn: 4, mount: 'aluminum', name: '4" aluminum post kit (post + cap + skirt)' },
     ],
+    postAccessory: { caps: [{ id: 'std', name: 'Standard cap + skirt' }], skirt: true, integral: true },
     compositeSteelPosts: false,
     bottomRail: { heightIn: 1.5, gapIn: 3.5 },
     gates: true,

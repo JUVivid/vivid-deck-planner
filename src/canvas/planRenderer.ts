@@ -649,9 +649,14 @@ export function renderPlan(
         ctx.strokeStyle = C.railing
         ctx.lineWidth = 1
         line(a, b)
-        // posts at the top and bottom of the run
+        // posts at the top and bottom of the run, plus intermediates every 6'
+        // of rake (stair rail sections come 6' — no unsupported full-run rake)
         ctx.fillStyle = C.railing
-        for (const p of [a, b]) {
+        const rakeSlope = Math.hypot(dist(a, b), sc.rise)
+        const stairBays = Math.max(1, Math.ceil(rakeSlope / 6))
+        const guardPosts: Pt[] = [a, b]
+        for (let m = 1; m < stairBays; m++) guardPosts.push(lerp(a, b, m / stairBays))
+        for (const p of guardPosts) {
           const q = W(p)
           ctx.fillRect(q.x - postPx / 2, q.y - postPx / 2, postPx, postPx)
         }

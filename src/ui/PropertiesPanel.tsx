@@ -631,6 +631,24 @@ function RailingSection() {
           </select>
         </Field>
       )}
+      {system.postAccessory && !system.postAccessory.integral && (
+        <Field label="Post cap & skirt" hint={system.postAccessory.skirt ? 'cap on top, skirt ring at the base — every post' : undefined}>
+          <select
+            value={r.postCapId ?? system.postAccessory.caps[0]?.id}
+            onChange={(e) => updateSettings((s) => (s.railing.postCapId = e.target.value))}
+          >
+            {system.postAccessory.caps.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {system.postAccessory!.skirt ? ' + skirt' : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {system.postAccessory?.integral && (
+        <div className="hint-line">Every post kit includes its cap and skirt — nothing extra to order.</div>
+      )}
       <div className="hint-line">
         Top-mounted, posts set ~2" inside the deck edge. Sections {system.sectionsFt.map((s) => `${s}'`).join(' / ')} cut to even bays.{' '}
         {system.compositeSteelPosts ? 'Interior posts: steel surface-mount (no 4x4 wood). ' : ''}

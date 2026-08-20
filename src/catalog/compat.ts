@@ -297,6 +297,14 @@ export function normalizeRailing(project: Project): string[] {
     r.colorId = topColors[0]
   }
 
+  // post cap style must exist for this system (default = the first offering)
+  const pa = system.postAccessory
+  if (!pa) {
+    r.postCapId = undefined
+  } else if (!pa.caps.some((c) => c.id === r.postCapId)) {
+    r.postCapId = pa.caps[0]?.id
+  }
+
   let inf = system.infills.find((i) => i.id === r.infillId)
   if (!inf) {
     inf = system.infills[0]

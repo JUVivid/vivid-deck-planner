@@ -529,8 +529,9 @@ export function computeFraming(
   // ---- lateral bracing (diagonal 6x6 knee braces) above the height threshold ----
   r.bracingRequired = r.posts.length > 0 && (r.postTopFt > BRACE_HEIGHT_FT || (r.freestanding && r.postTopFt > 2))
   r.braceCount = r.bracingRequired ? r.posts.length * 2 : 0
-  // 45° braces: leg grows with the post, clamped to buildable stock
-  r.braceLegFt = r.bracingRequired ? Math.min(3, Math.max(1.5, r.postTopFt * 0.4)) : 0
+  // 45° braces: leg is at most ONE-THIRD of the post height (company rule),
+  // capped at 3' of buildable stock
+  r.braceLegFt = r.bracingRequired ? Math.min(3, r.postTopFt / 3) : 0
 
   // ---- hangers, ties & band ends ----
   // A connector is ordered for what a joist end actually DOES:

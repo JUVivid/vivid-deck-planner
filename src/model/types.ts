@@ -76,6 +76,8 @@ export interface RailingConfig {
   infillId: string
   /** selected post size option id (see RailingSystem.postOptions) */
   postOptionId?: string
+  /** selected post cap style id (see RailingSystem.postAccessory) */
+  postCapId?: string
 }
 
 export interface Tier {

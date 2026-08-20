@@ -303,10 +303,20 @@ export function renderElevation(
             ctx.fillStyle = railFill
             ctx.fillRect(X(inX0), Y(top + botGapFt + botHFt), wpx, botHFt * scale)
             ctx.strokeRect(X(inX0), Y(top + botGapFt + botHFt), wpx, botHFt * scale)
+            // footblock: kits include a center support foot under the bottom rail
+            const fbW = Math.max(2, (1.5 / 12) * scale)
+            ctx.fillRect(X((inX0 + inX1) / 2) - fbW / 2, Y(top + botGapFt), fbW, botGapFt * scale)
           }
           // infill
           const secLenKey = piece.sectionPlan[k]
           if (rinf.kind === 'baluster' || rinf.kind === 'open-mid') {
+            // open mid-rail (per the IRX config sheet): a SECOND rail sits a
+            // hand-gap below the top rail, balusters run bottom rail → mid
+            // rail, and the band above the mid rail stays open
+            const openMid = rinf.kind === 'open-mid'
+            const OPEN_GAP_FT = 6 / 12
+            const midRailHFt = 1.5 / 12
+            const balTop = openMid ? yInfillTop - OPEN_GAP_FT - midRailHFt : yInfillTop
             const kitCount = rinf.balustersPer[secLenKey] ?? Math.max(2, Math.round((secLenKey * 12) / 4.75))
             // sections are cut down to the bay length — balusters scale with them
             const n = Math.max(1, Math.round((kitCount * bayLenFt) / secLenKey))
@@ -316,28 +326,76 @@ export function renderElevation(
             ctx.fillStyle = '#5b81b8'
             for (let i2 = 1; i2 <= n; i2++) {
               const bx = inX0 + step * i2 + bw * (i2 - 1) + bw / 2
-              ctx.fillRect(X(bx) - memberW / 2, Y(yInfillTop), memberW, (yInfillTop - yInfillBot) * scale)
+              ctx.fillRect(X(bx) - memberW / 2, Y(balTop), memberW, (balTop - yInfillBot) * scale)
             }
-            if (rinf.kind === 'open-mid') {
+            if (openMid) {
               ctx.fillStyle = railFill
-              const yMid = (yInfillBot + yInfillTop) / 2
-              ctx.fillRect(X(inX0), Y(yMid + 0.06), wpx, 0.12 * scale)
+              ctx.strokeStyle = railStroke
+              ctx.fillRect(X(inX0), Y(balTop + midRailHFt), wpx, midRailHFt * scale)
+              ctx.strokeRect(X(inX0), Y(balTop + midRailHFt), wpx, midRailHFt * scale)
             }
           } else if (rinf.kind === 'glass') {
+            // channel kit: aluminum channels top + bottom, tempered pane between
+            const chFt = 1 / 12
+            const gx0 = inX0 + 0.04
+            const gw = wpx - 0.08 * scale
+            ctx.fillStyle = railFill
+            ctx.fillRect(X(gx0), Y(yInfillTop), gw, chFt * scale)
+            ctx.fillRect(X(gx0), Y(yInfillBot + chFt), gw, chFt * scale)
             ctx.fillStyle = 'rgba(150,185,215,0.3)'
             ctx.strokeStyle = '#8aa6c2'
-            ctx.fillRect(X(inX0 + 0.05), Y(yInfillTop), wpx - 0.1 * scale, (yInfillTop - yInfillBot) * scale)
-            ctx.strokeRect(X(inX0 + 0.05), Y(yInfillTop), wpx - 0.1 * scale, (yInfillTop - yInfillBot) * scale)
-          } else if (rinf.kind === 'panel') {
-            ctx.strokeStyle = '#5b81b8'
-            ctx.lineWidth = 1
-            ctx.strokeRect(X(inX0 + 0.05), Y(yInfillTop), wpx - 0.1 * scale, (yInfillTop - yInfillBot) * scale)
+            ctx.lineWidth = 0.8
+            ctx.fillRect(X(gx0), Y(yInfillTop - chFt), gw, (yInfillTop - yInfillBot - 2 * chFt) * scale)
+            ctx.strokeRect(X(gx0), Y(yInfillTop - chFt), gw, (yInfillTop - yInfillBot - 2 * chFt) * scale)
+            // glare line
+            ctx.strokeStyle = 'rgba(255,255,255,0.7)'
             ctx.beginPath()
-            ctx.moveTo(X(inX0 + 0.05), Y(yInfillBot))
-            ctx.lineTo(X(inX1 - 0.05), Y(yInfillTop))
-            ctx.moveTo(X(inX0 + 0.05), Y(yInfillTop))
-            ctx.lineTo(X(inX1 - 0.05), Y(yInfillBot))
+            ctx.moveTo(X(gx0 + (inX1 - inX0) * 0.18), Y(yInfillBot + 0.25))
+            ctx.lineTo(X(gx0 + (inX1 - inX0) * 0.45), Y(yInfillTop - 0.2))
             ctx.stroke()
+          } else if (rinf.kind === 'panel') {
+            // Pinnacle deco panels are SQUARE (29¾" for 36" rails / 35¾" for
+            // 42") — a bay holds whole squares side by side, framed, with the
+            // pattern routed inside
+            const side = (rcfg.heightIn === 42 ? 35.75 : 29.75) / 12
+            const clear = inX1 - inX0
+            const nP = Math.max(1, Math.floor((clear + 0.1) / (side + 0.1)))
+            const gap = (clear - nP * side) / (nP + 1)
+            ctx.strokeStyle = '#5b81b8'
+            ctx.lineWidth = Math.max(1, (1.25 / 12) * scale * 0.6)
+            for (let pI = 0; pI < nP; pI++) {
+              const px0 = inX0 + gap + pI * (side + gap)
+              const py0 = yInfillBot
+              const py1 = Math.min(yInfillTop, yInfillBot + side)
+              const h = py1 - py0
+              ctx.strokeRect(X(px0), Y(py1), side * scale, h * scale)
+              ctx.beginPath()
+              if (rinf.id.includes('web')) {
+                // square web: orthogonal grid, 3 × 3
+                for (let g = 1; g <= 2; g++) {
+                  const gx = px0 + (side * g) / 3
+                  ctx.moveTo(X(gx), Y(py1))
+                  ctx.lineTo(X(gx), Y(py0))
+                  const gy = py0 + (h * g) / 3
+                  ctx.moveTo(X(px0), Y(gy))
+                  ctx.lineTo(X(px0 + side), Y(gy))
+                }
+              } else {
+                // chippendale type 1: crossing diagonals + center diamond
+                ctx.moveTo(X(px0), Y(py1))
+                ctx.lineTo(X(px0 + side), Y(py0))
+                ctx.moveTo(X(px0), Y(py0))
+                ctx.lineTo(X(px0 + side), Y(py1))
+                const mx = px0 + side / 2
+                const my = py0 + h / 2
+                ctx.moveTo(X(mx), Y(py1))
+                ctx.lineTo(X(px0 + side), Y(my))
+                ctx.lineTo(X(mx), Y(py0))
+                ctx.lineTo(X(px0), Y(my))
+                ctx.lineTo(X(mx), Y(py1))
+              }
+              ctx.stroke()
+            }
           } else if (rinf.kind === 'cable-vertical') {
             ctx.strokeStyle = '#6b7f99'
             ctx.lineWidth = 1
@@ -377,6 +435,23 @@ export function renderElevation(
         if (surface) {
           ctx.fillStyle = '#3a3f47'
           ctx.fillRect(X(px) - wpx * 0.9, Y(top + 0.02), wpx * 1.8, 0.12 * scale)
+        } else if (rsys.postAccessory) {
+          // cap: overhanging slab, with a raised tier for the pyramid-style
+          // Post Cap; skirt: flared ring where the post meets the deck
+          const capW = wpx * 1.3
+          const capH = Math.max(2, (1 / 12) * scale)
+          const capY = Y(top + guardFt + 0.06)
+          ctx.fillRect(X(px) - capW / 2, capY - capH, capW, capH)
+          const capId = rcfg.postCapId ?? rsys.postAccessory.caps[0]?.id
+          if (capId === 'cap' || capId === 'std') {
+            const tierH = Math.max(1.5, (0.75 / 12) * scale)
+            ctx.fillRect(X(px) - (wpx * 0.7) / 2, capY - capH - tierH, wpx * 0.7, tierH)
+          }
+          if (rsys.postAccessory.skirt) {
+            const skW = wpx * 1.35
+            const skH = Math.max(2, (3 / 12) * scale)
+            ctx.fillRect(X(px) - skW / 2, Y(top + 3 / 12), skW, skH)
+          }
         } else {
           ctx.fillRect(X(px) - (wpx * 1.25) / 2, Y(top + guardFt + 0.06 + 0.1), wpx * 1.25, 0.1 * scale)
         }
@@ -492,8 +567,15 @@ export function renderElevation(
       }
       const xEnd = originSx + sgn * sc.totalRunFt
       ctx.lineTo(X(xEnd), Y(landZ)) // bottom plumb cut bears on the landing
-      // solid bottom chord back up to the rim (2x12 stringer depth)
-      ctx.lineTo(X(originSx), Y(Math.max(landZ, top - scDeckThk - 11.25 / 12)))
+      // underside PARALLEL to the pitch at the 2x12's true plumb depth, with a
+      // horizontal seat cut where it meets the landing — constant thickness,
+      // to scale, and exactly where the engine puts the mid-span girder
+      const cosSlope = sc.treadIn / Math.hypot(sc.treadIn, sc.riserIn)
+      const plumbFt = 11.25 / 12 / Math.max(0.5, cosSlope)
+      const topUnder = top - scDeckThk - plumbFt
+      const xSeat = originSx + sgn * Math.min(sc.totalRunFt, Math.max(0, ((topUnder - landZ) * sc.totalRunFt) / sc.rise))
+      ctx.lineTo(X(xSeat), Y(landZ)) // seat cut on the landing
+      ctx.lineTo(X(originSx), Y(Math.max(landZ, topUnder))) // parallel underside
       ctx.closePath()
       ctx.fillStyle = '#caa06b'
       ctx.strokeStyle = '#8a6a3a'
@@ -578,6 +660,17 @@ export function renderElevation(
         ctx.lineWidth = 0.8
         ctx.fillRect(X(topSx) - postW / 2, Y(top + guardFt + 0.05), postW, (guardFt + 0.05) * scale)
         ctx.fillRect(X(xEnd) - postW / 2, Y(zNoseBot + guardFt + 0.05), postW, (zNoseBot + guardFt + 0.05 - landZ) * scale)
+        // intermediate posts: stair rail sections come 6' — a long rake can't
+        // run unsupported, so mids split it into equal bays
+        const rakeHoriz = Math.abs(xEnd - topSx)
+        const rakeSlope = Math.hypot(rakeHoriz, top - zNoseBot)
+        const stairBays = Math.max(1, Math.ceil(rakeSlope / 6))
+        for (let m = 1; m < stairBays; m++) {
+          const tM = m / stairBays
+          const xm = topSx + sgn * rakeHoriz * tM
+          const zm = top + (zNoseBot - top) * tM
+          ctx.fillRect(X(xm) - postW / 2, Y(zm + guardFt + 0.05), postW, (guardFt + 0.05) * scale)
+        }
         // raked top rail (springs off the shared post, follows the nosing line)
         ctx.strokeStyle = railFill
         ctx.lineWidth = Math.max(2, (rtop.heightIn / 12) * scale)

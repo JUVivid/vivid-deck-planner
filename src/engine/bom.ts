@@ -642,12 +642,16 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
     if (sc.guardRequired) {
       const system = railSystemById(project.settings.railing.systemId) ?? RAILING_SYSTEMS[0]
       const rcfg = project.settings.railing
+      // stair sections come 6' — a long rake splits into equal bays with an
+      // intermediate post at every break (matches the drawings)
+      const rakeSlopeFt = Math.hypot(sc.totalRunFt, sc.rise)
+      const stairBays = Math.max(1, Math.ceil(rakeSlopeFt / 6))
       acc({
         section: S.railing,
         item: `${system.name} stair rail section 6' — ${rcfg.colorId}`,
         sku: 'rail:stair-rail-6',
-        detail: `${label} — guard both sides`,
-        qty: 2,
+        detail: `${label} — guard both sides (${stairBays} bay${stairBays > 1 ? 's' : ''} per side)`,
+        qty: 2 * stairBays,
         unit: 'ea',
         note: 'Omit a side that runs along a wall.',
       })
@@ -657,11 +661,12 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
       const edgeRailed = !!sc.tier.edges[sc.stairs.edgeIndex]?.railing
       // use the post the user actually selected — not the system's generic post
       const stairPost = resolvePost(system, rcfg.postOptionId, 'end')
+      const midPosts = 2 * (stairBays - 1)
       acc({
         section: S.railing,
         item: `${stairPost.name} — ${rcfg.colorId}`,
-        detail: `${label} — stair rail ${edgeRailed ? 'bottom posts' : 'posts'}`,
-        qty: edgeRailed ? 2 : 4,
+        detail: `${label} — stair rail ${edgeRailed ? 'bottom' : ''} posts${midPosts > 0 ? ` + ${midPosts} intermediates on the rake` : ''}`,
+        qty: (edgeRailed ? 2 : 4) + midPosts,
         unit: 'ea',
         note: edgeRailed ? 'Top posts shared with the deck guard corner posts.' : undefined,
       })
@@ -983,6 +988,7 @@ function railingBomForTier(
       if (pl.role === 'line') lineCount++
     }
     const total = rl.postPlacements.length
+    const capName = system.postAccessory?.caps.find((c) => c.id === cfg.postCapId)?.name ?? system.postAccessory?.caps[0]?.name ?? 'Post cap'
     if (system.compositeSteelPosts) {
       const line = lineCount
       const ends = Math.max(0, total - line)
@@ -1002,7 +1008,7 @@ function railingBomForTier(
       if (ends > 0) {
         acc({ section: S6, item: `${sleeve.name} — ${color}`, sku: 'rail:sleeve-ccs-4x4', detail: `${tierName}: end/corner posts over blocking`, qty: ends, unit: 'ea' })
         acc({ section: S6, item: "4x4-8' PT post", sku: 'lumber:4x4-8', detail: `${tierName}: structural post inside each end/corner sleeve, bolted to rim/blocking`, qty: ends, unit: 'ea' })
-        acc({ section: S6, item: 'Post cap + skirt', sku: `rail:capskirt|${color}`, detail: `${tierName}: ${color}`, qty: ends, unit: 'ea' })
+        acc({ section: S6, item: `${capName} + skirt`, sku: `rail:capskirt|${color}`, detail: `${tierName}: ${color}`, qty: ends, unit: 'ea' })
       }
     } else {
       const opt = selectedPostOption(system, cfg.postOptionId)
@@ -1010,7 +1016,7 @@ function railingBomForTier(
       acc({ section: S6, item: `${opt.name}${heightNote} — ${color}`, detail: `${tierName}: rail posts`, qty: total, unit: 'ea' })
       if (opt.mount === 'sleeve') {
         acc({ section: S6, item: "4x4-8' PT post", sku: 'lumber:4x4-8', detail: `${tierName}: plumb/level structural post inside each sleeve`, qty: total, unit: 'ea' })
-        acc({ section: S6, item: 'Post cap + skirt', sku: `rail:capskirt|${color}`, detail: `${tierName}: ${color}`, qty: total, unit: 'ea' })
+        acc({ section: S6, item: `${capName} + skirt`, sku: `rail:capskirt|${color}`, detail: `${tierName}: ${color}`, qty: total, unit: 'ea' })
       }
     }
   }

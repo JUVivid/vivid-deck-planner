@@ -695,8 +695,9 @@ describe('auto-framing (company standard — the program decides)', () => {
     const fr = [...c.byTier.values()][0].framing
     expect(fr.bracingRequired).toBe(true)
     expect(fr.braceCount).toBe(fr.posts.length * 2)
-    expect(fr.braceLegFt).toBeGreaterThan(1.4)
-    expect(fr.braceLegFt).toBeLessThanOrEqual(3)
+    // company rule: the brace leg is at most ONE-THIRD of the post height
+    expect(fr.braceLegFt).toBeCloseTo(Math.min(3, fr.postTopFt / 3), 6)
+    expect(fr.braceLegFt).toBeLessThanOrEqual(fr.postTopFt / 3 + 1e-9)
     // ordered as real 6x6 cuts (45° hypotenuse + trim), pooled with the posts
     const plan = c.cutPlans.find((x) => x.size === '6x6')!
     const braceCuts = plan.boards.flatMap((b) => b.cuts).filter((x) => x.label.includes('knee braces'))
@@ -1103,6 +1104,53 @@ describe('tall stairs get a mid-span girder (cut stringers max ~6\' of span)', (
     const c2 = computeProject(low)
     expect(c2.stairs[0].midSupports.length).toBe(0)
     expect(c2.bom.some((l) => l.detail.includes('mid-span'))).toBe(false)
+  })
+})
+
+describe('railing fidelity: glass spacing, stair bays, caps & skirts', () => {
+  it('glass runs take 6\' max sections — closer posts than balusters', () => {
+    const bal = rectDeck(20, 12)
+    bal.settings.railing.systemId = 'classic-composite'
+    bal.settings.railing.infillId = 'comp-bal'
+    const glass = rectDeck(20, 12)
+    glass.settings.railing.systemId = 'classic-composite'
+    glass.settings.railing.infillId = 'glass'
+    const rBal = [...computeProject(bal).byTier.values()][0].railing
+    const rGlass = [...computeProject(glass).byTier.values()][0].railing
+    // same runs, more posts for glass (every bay ≤ 6')
+    expect(rGlass.posts).toBeGreaterThan(rBal.posts)
+    for (const piece of rGlass.pieces) {
+      for (const secLen of piece.sectionPlan) expect(secLen).toBeLessThanOrEqual(6)
+    }
+  })
+
+  it('a long stair rake splits into 6\' bays with intermediate posts', () => {
+    const tall = rectDeck(16, 12, 7)
+    tall.stairs.push({ id: uid('st'), tierId: tall.tiers[0].id, edgeIndex: 2, t: 0.5, width: 4, landing: { kind: 'grade' } })
+    const c = computeProject(tall)
+    const sc = c.stairs[0]
+    const rakeSlope = Math.hypot(sc.totalRunFt, sc.rise)
+    expect(rakeSlope).toBeGreaterThan(6)
+    const sections = c.bom.find((l) => l.sku === 'rail:stair-rail-6')!
+    expect(sections.qty).toBeGreaterThanOrEqual(4) // 2 bays × both sides
+    const posts = c.bom.find((l) => l.detail.includes('intermediates on the rake'))!
+    expect(posts).toBeTruthy()
+  })
+
+  it('post cap + skirt: selectable style, family-normalized, named on the order', async () => {
+    const { normalizeRailing } = await import('../src/catalog/compat')
+    const p = rectDeck(16, 12)
+    p.settings.railing.systemId = 'classic-composite'
+    p.settings.railing.postCapId = 'island'
+    normalizeRailing(p)
+    expect(p.settings.railing.postCapId).toBe('island')
+    const c = computeProject(p)
+    const capLine = c.bom.find((l) => l.sku && l.sku.startsWith('rail:capskirt'))!
+    expect(capLine.item).toContain('Island Cap')
+    // a bogus cap id falls back to the system default
+    p.settings.railing.postCapId = 'not-a-cap'
+    normalizeRailing(p)
+    expect(p.settings.railing.postCapId).toBe('cap')
   })
 })
 

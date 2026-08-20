@@ -69,8 +69,12 @@ export function computeRailing(tier: Tier, stairCalcs: StairsCalc[], settings: P
   const n = tier.outline.length
   const system = railSystemById(settings.railing.systemId) ?? RAILING_SYSTEMS[0]
   const inf = system.infills.find((i) => i.id === settings.railing.infillId) ?? system.infills[0]
-  const sectionSizes = [...system.sectionsFt].sort((a, b) => b - a)
-  const maxSec = sectionSizes[0]
+  // glass channel/panel kits only come 6' — glass runs take closer post
+  // spacing than the system's longest baluster section
+  const sectionSizes = [...system.sectionsFt]
+    .filter((s) => !inf.maxSectionFt || s <= inf.maxSectionFt)
+    .sort((a, b) => b - a)
+  const maxSec = sectionSizes[0] ?? Math.min(...system.sectionsFt)
 
   // rail centerline inset from the deck edge (top-mount: post face ~2" inside
   // the rim, so center = face inset + half post). Needed up front because the
