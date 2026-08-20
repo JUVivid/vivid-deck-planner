@@ -583,15 +583,16 @@ export function renderElevation(
       }
       const xEnd = originSx + sgn * sc.totalRunFt
       ctx.lineTo(X(xEnd), Y(landZ)) // bottom plumb cut bears on the landing
-      // underside PARALLEL to the pitch at the 2x12's true plumb depth, with a
-      // horizontal seat cut where it meets the landing — constant thickness,
-      // to scale, and exactly where the engine puts the mid-span girder
+      // underside PARALLEL TO THE NOSING LINE (riser/tread pitch — the line a
+      // framing square lays out, NOT the flight hypotenuse) at the 2x12's true
+      // plumb depth, with a horizontal seat cut where it meets the landing.
       const cosSlope = sc.treadIn / Math.hypot(sc.treadIn, sc.riserIn)
       const plumbFt = 11.25 / 12 / Math.max(0.5, cosSlope)
       const topUnder = top - scDeckThk - plumbFt
-      const xSeat = originSx + sgn * Math.min(sc.totalRunFt, Math.max(0, ((topUnder - landZ) * sc.totalRunFt) / sc.rise))
+      const nosingPitch = rFt / tFt // rise per foot of run along the nosings
+      const xSeat = originSx + sgn * Math.min(sc.totalRunFt, Math.max(0, (topUnder - landZ) / nosingPitch))
       ctx.lineTo(X(xSeat), Y(landZ)) // seat cut on the landing
-      ctx.lineTo(X(originSx), Y(Math.max(landZ, topUnder))) // parallel underside
+      ctx.lineTo(X(originSx), Y(Math.max(landZ, topUnder))) // nosing-parallel underside
       ctx.closePath()
       ctx.fillStyle = '#caa06b'
       ctx.strokeStyle = '#8a6a3a'
@@ -695,7 +696,7 @@ export function renderElevation(
         stairCapSkirt(xEnd, zNoseBot + guardFt + 0.05, landZ)
         // intermediate posts: stair rail sections come 6' — a long rake can't
         // run unsupported, so mids split it into equal bays. Each mid post
-        // lands ON the tread below it (one riser past the rake line).
+        // stands ON the exact tread beneath it (never inside a step).
         const rakeHoriz = Math.abs(xEnd - topSx)
         const rakeSlope = Math.hypot(rakeHoriz, top - zNoseBot)
         const stairBays = Math.max(1, Math.ceil(rakeSlope / 6))
@@ -703,7 +704,10 @@ export function renderElevation(
           const tM = m / stairBays
           const xm = topSx + sgn * rakeHoriz * tM
           const zm = top + (zNoseBot - top) * tM
-          const zBase = Math.max(landZ, zm - rFt)
+          // the tread under xm: tread n covers ((n−1)·t, n·t] out from the rim
+          const xRel = Math.max(0, Math.abs(xm - originSx))
+          const treadN = Math.min(sc.treadCount, Math.max(1, Math.floor(xRel / tFt) + 1))
+          const zBase = Math.max(landZ, top - treadN * rFt)
           ctx.fillRect(X(xm) - postW / 2, Y(zm + guardFt + 0.05), postW, (zm + guardFt + 0.05 - zBase) * scale)
           stairCapSkirt(xm, zm + guardFt + 0.05, zBase)
         }

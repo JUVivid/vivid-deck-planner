@@ -293,14 +293,16 @@ export function computeStairs(st: Stairs, project: Project): StairsCalc | null {
   if (!wrapped && span.legs.length === 1 && totalRunFt > CODE.maxStringerSpanFt + 0.02) {
     const leg = span.legs[0]
     const nSup = Math.ceil(totalRunFt / CODE.maxStringerSpanFt) - 1
-    // stringer depth measured plumb + tread thickness + girder depth below
+    // stringer underside runs PARALLEL TO THE NOSING LINE (riser/tread pitch)
+    // at the 2x12's plumb depth — the girder top meets exactly that line
     const cosSlope = treadIn / Math.hypot(treadIn, riserIn)
     const plumbDepthFt = 11.25 / 12 / Math.max(0.5, cosSlope)
     const treadThkFt = profile.thickIn / 12
+    const nosingPitch = riserIn / treadIn
     for (let k = 1; k <= nSup; k++) {
       const xFt = (totalRunFt * k) / (nSup + 1)
-      const surfaceZ = tier.height - rise * (xFt / totalRunFt)
-      const postTopFt = Math.max(0.2, surfaceZ - treadThkFt - plumbDepthFt - 9.25 / 12)
+      const undersideZ = tier.height - treadThkFt - plumbDepthFt - nosingPitch * xFt
+      const postTopFt = Math.max(0.2, undersideZ - 9.25 / 12)
       const a = add(leg.a, mul(leg.normal, xFt))
       const b = add(leg.b, mul(leg.normal, xFt))
       const inset = Math.min(1, attachWidthFt / 4)
