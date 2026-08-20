@@ -222,6 +222,12 @@ function StairsProps({ stairsId }: { stairsId: string }) {
           <div>
             Total rise {ftIn(calc.rise)} to {calc.landingLabel} · {Math.round(calc.finishSqft * 10) / 10} sq ft finished
           </div>
+          {calc.midSupports.length > 0 && (
+            <div>
+              mid-span girder on 6x6 posts @ {calc.midSupports.map((m) => ftIn(m.xFt)).join(' / ')} out — stringers
+              over the 6' span limit
+            </div>
+          )}
         </div>
       )}
       {calc && !calc.ok && calc.errors.map((e, i) => <div key={i} className="error-card">{e}</div>)}

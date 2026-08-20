@@ -1072,6 +1072,40 @@ describe('span charts govern — the buyer can never override the engineer', () 
   })
 })
 
+describe('tall stairs get a mid-span girder (cut stringers max ~6\' of span)', () => {
+  it('a 7\' deck flight gets girder + posts + footings; a low flight does not', () => {
+    const tall = rectDeck(16, 12, 7)
+    tall.stairs.push({ id: uid('st'), tierId: tall.tiers[0].id, edgeIndex: 2, t: 0.5, width: 4, landing: { kind: 'grade' } })
+    const c = computeProject(tall)
+    const sc = c.stairs[0]
+    expect(sc.totalRunFt).toBeGreaterThan(6)
+    expect(sc.midSupports.length).toBe(1)
+    const ms = sc.midSupports[0]
+    // support splits the run so no stringer span exceeds the 6' limit
+    expect(ms.xFt).toBeCloseTo(sc.totalRunFt / 2, 3)
+    expect(ms.xFt).toBeLessThanOrEqual(6.01)
+    expect(sc.totalRunFt - ms.xFt).toBeLessThanOrEqual(6.01)
+    expect(ms.posts.length).toBe(2)
+    expect(ms.postTopFt).toBeGreaterThan(0.5)
+    // ordered like any girder: plies, 6x6 posts, caps, ties, real footings
+    expect(c.bom.some((l) => l.detail.includes('mid-span stringer girder'))).toBe(true)
+    expect(c.bom.some((l) => l.detail.includes('mid-span girder posts'))).toBe(true)
+    expect(c.bom.some((l) => l.detail.includes('girder footings'))).toBe(true)
+    expect(c.bom.some((l) => l.detail.includes('tied to the mid-span girder'))).toBe(true)
+    // the girder + posts are real cuts in the stairs pools
+    const stairPools = c.cutPlans.filter((p) => p.section.includes('Stairs'))
+    const cuts = stairPools.flatMap((p) => p.boards.flatMap((b) => b.cuts))
+    expect(cuts.filter((x) => x.label.includes('mid-span stringer girder')).length).toBe(2) // 2-ply
+    expect(cuts.filter((x) => x.label.includes('mid-span girder posts')).length).toBe(2)
+    // a low flight (short run) gets none of this
+    const low = rectDeck(16, 12, 3.5)
+    low.stairs.push({ id: uid('st'), tierId: low.tiers[0].id, edgeIndex: 2, t: 0.5, width: 4, landing: { kind: 'grade' } })
+    const c2 = computeProject(low)
+    expect(c2.stairs[0].midSupports.length).toBe(0)
+    expect(c2.bom.some((l) => l.detail.includes('mid-span'))).toBe(false)
+  })
+})
+
 describe('customer quote', () => {
   const quoteOf = (fn?: (p: Project) => void) => {
     const p = demoProject()

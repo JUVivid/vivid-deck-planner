@@ -207,29 +207,40 @@ export function renderElevation(
       ctx.strokeRect(X(lo), Y(bm.postTopFt + beamD), (hi - lo) * scale, beamD * scale)
     }
 
-    // diagonal 6x6 knee braces — drawn TO SCALE: a 5.5"-thick member at 45°
-    // from the post face to the beam underside, leg length from the engine so
-    // the drawing cross-checks the order
+    // diagonal 6x6 knee braces — drawn TO SCALE as real members: a 5.5"-thick
+    // stick at 45° with a PLUMB cut bearing on the post face and a LEVEL cut
+    // bearing on the girder underside, so every end actually connects
     if (fr.bracingRequired && fr.braceLegFt > 0) {
       const braceFt = fr.braceLegFt
-      ctx.strokeStyle = '#a97142'
-      ctx.lineCap = 'butt'
-      ctx.lineWidth = Math.max(2, (5.5 / 12) * scale)
+      const wFt = 5.5 / 12
+      const halfPost = 5.5 / 24
+      const k = (wFt * Math.SQRT2) / 2 // edge offset along the cut planes
+      ctx.fillStyle = '#a97142'
+      ctx.strokeStyle = '#7a5a2e'
+      ctx.lineWidth = 0.8
       for (const bm of fr.beams) {
         const ba = dot(bm.seg.a, basis.right)
         const bb = dot(bm.seg.b, basis.right)
         const blo = Math.min(ba, bb)
         const bhi = Math.max(ba, bb)
-        const beamBottomY = bm.postTopFt
+        const z1 = bm.postTopFt // girder underside
         for (const post of bm.posts) {
           const sx = dot(post, basis.right)
           for (const d of [-1, 1]) {
-            const endSx = sx + d * braceFt
+            const xPost = sx + d * halfPost
+            const xOuter = xPost + d * (braceFt + k)
             // only draw a brace on a side where the beam actually extends
-            if (endSx < blo - 0.02 || endSx > bhi + 0.02) continue
+            if (xOuter < blo - 0.02 || xOuter > bhi + 0.02) continue
+            if (z1 - braceFt - k < 0.05) continue
+            // plumb cut on the post: (xPost, z1−L−k)…(xPost, z1−L+k)
+            // level cut on the girder: (xPost+d(L−k), z1)…(xPost+d(L+k), z1)
             ctx.beginPath()
-            ctx.moveTo(X(sx), Y(beamBottomY - braceFt))
-            ctx.lineTo(X(endSx), Y(beamBottomY))
+            ctx.moveTo(X(xPost), Y(z1 - braceFt - k))
+            ctx.lineTo(X(xPost), Y(z1 - braceFt + k))
+            ctx.lineTo(X(xPost + d * (braceFt - k)), Y(z1))
+            ctx.lineTo(X(xOuter), Y(z1))
+            ctx.closePath()
+            ctx.fill()
             ctx.stroke()
           }
         }
@@ -515,6 +526,28 @@ export function renderElevation(
           }
         }
       }
+      // ---- mid-span stringer girder + 6x6 posts (tall flights) ----
+      for (const ms of sc.midSupports) {
+        const gx = originSx + sgn * ms.xFt
+        const postW = Math.max(3, (5.5 / 12) * scale)
+        const gd = 9.25 / 12
+        // footing (dashed, below grade)
+        ctx.strokeStyle = '#9aa1ab'
+        ctx.setLineDash([4, 3])
+        ctx.strokeRect(X(gx) - (12 / 24) * scale, Y(0), (12 / 12) * scale, (project.settings.frostDepth / 12) * scale)
+        ctx.setLineDash([])
+        // post to grade
+        ctx.fillStyle = '#a97142'
+        ctx.fillRect(X(gx) - postW / 2, Y(ms.postTopFt), postW, ms.postTopFt * scale)
+        // (2)-ply girder seen end-on, under the stringers
+        const gw = Math.max(3, (3 / 12) * scale)
+        ctx.fillStyle = '#e9b36a'
+        ctx.strokeStyle = '#b97f28'
+        ctx.lineWidth = 0.8
+        ctx.fillRect(X(gx) - gw / 2, Y(ms.postTopFt + gd), gw, gd * scale)
+        ctx.strokeRect(X(gx) - gw / 2, Y(ms.postTopFt + gd), gw, gd * scale)
+      }
+
       // ---- landing pad under the bottom plumb cut (grade landings) ----
       if (sc.stairs.landing.kind === 'grade') {
         ctx.fillStyle = '#c8c4bb'
@@ -597,6 +630,24 @@ export function renderElevation(
         ctx.moveTo(X(sxP), Y(top - scDeckThk))
         ctx.lineTo(X(sxP), Y(0))
         ctx.stroke()
+      }
+      // mid-span girder (face-on: full band) + its posts
+      for (const ms of sc.midSupports) {
+        const g0 = dot(ms.a, basis.right)
+        const g1 = dot(ms.b, basis.right)
+        const lo = Math.min(g0, g1)
+        const gd = 9.25 / 12
+        ctx.fillStyle = '#e9b36a'
+        ctx.strokeStyle = '#b97f28'
+        ctx.lineWidth = 0.8
+        ctx.fillRect(X(lo), Y(ms.postTopFt + gd), Math.abs(g1 - g0) * scale, gd * scale)
+        ctx.strokeRect(X(lo), Y(ms.postTopFt + gd), Math.abs(g1 - g0) * scale, gd * scale)
+        ctx.fillStyle = '#a97142'
+        const pw = Math.max(3, (5.5 / 12) * scale)
+        for (const p of ms.posts) {
+          const sxP = dot(p, basis.right)
+          ctx.fillRect(X(sxP) - pw / 2, Y(ms.postTopFt), pw, ms.postTopFt * scale)
+        }
       }
     }
     ctx.restore()

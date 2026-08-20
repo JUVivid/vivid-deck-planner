@@ -133,6 +133,23 @@ export interface StairsCalc {
   baseFrontLf: number
   /** closed plan-view outline of the whole flight (hit-testing / selection) */
   footprint: Pt[]
+  /**
+   * Mid-span stringer supports: cut 2x12 stringers max out around 6' of
+   * horizontal span (DCA 6), so a tall flight gets a girder on 6x6 posts under
+   * the stringers — with footings, like any other girder.
+   */
+  midSupports: StairMidSupport[]
+}
+
+export interface StairMidSupport {
+  /** horizontal distance out from the deck edge, ft */
+  xFt: number
+  /** girder centerline under the stringers */
+  a: Pt
+  b: Pt
+  posts: Pt[]
+  /** ft, top of posts (underside of the girder) */
+  postTopFt: number
 }
 
 const polylineLen = (pts: Pt[]): number => {
@@ -197,7 +214,7 @@ export function computeStairs(st: Stairs, project: Project): StairsCalc | null {
       attachWidthFt: 0, treadSqft: 0, riserSqft: 0, finishSqft: 0,
       origin: tier.outline[i], outDir: { x: 0, y: 1 }, edgeDir: { x: 1, y: 0 },
       corners: [tier.outline[i], tier.outline[i], tier.outline[i], tier.outline[i]],
-      wrapCorners: 0, wrapped: false, rings: [], edgeOpenings: [], baseFrontLf: 0, footprint: [],
+      wrapCorners: 0, wrapped: false, rings: [], edgeOpenings: [], baseFrontLf: 0, footprint: [], midSupports: [],
     }
   }
 
@@ -269,6 +286,34 @@ export function computeStairs(st: Stairs, project: Project): StairsCalc | null {
     width: leg.lenFt,
   }))
 
+  // ---- mid-span stringer supports (straight flights only — wraps are short) ----
+  // Cut 2x12 stringers span ~6' max between bearings (DCA 6). A taller flight
+  // gets a girder on 6x6 posts under the stringers, spans kept equal.
+  const midSupports: StairMidSupport[] = []
+  if (!wrapped && span.legs.length === 1 && totalRunFt > CODE.maxStringerSpanFt + 0.02) {
+    const leg = span.legs[0]
+    const nSup = Math.ceil(totalRunFt / CODE.maxStringerSpanFt) - 1
+    // stringer depth measured plumb + tread thickness + girder depth below
+    const cosSlope = treadIn / Math.hypot(treadIn, riserIn)
+    const plumbDepthFt = 11.25 / 12 / Math.max(0.5, cosSlope)
+    const treadThkFt = profile.thickIn / 12
+    for (let k = 1; k <= nSup; k++) {
+      const xFt = (totalRunFt * k) / (nSup + 1)
+      const surfaceZ = tier.height - rise * (xFt / totalRunFt)
+      const postTopFt = Math.max(0.2, surfaceZ - treadThkFt - plumbDepthFt - 9.25 / 12)
+      const a = add(leg.a, mul(leg.normal, xFt))
+      const b = add(leg.b, mul(leg.normal, xFt))
+      const inset = Math.min(1, attachWidthFt / 4)
+      const nPosts = Math.max(2, Math.ceil((attachWidthFt - 2 * inset) / 6) + 1)
+      const posts: Pt[] = []
+      for (let p = 0; p < nPosts; p++) {
+        const t = nPosts === 1 ? 0.5 : inset / attachWidthFt + (1 - (2 * inset) / attachWidthFt) * (p / (nPosts - 1))
+        posts.push(lerp(a, b, t))
+      }
+      midSupports.push({ xFt, a, b, posts, postTopFt })
+    }
+  }
+
   return {
     stairs: st,
     tier,
@@ -305,5 +350,6 @@ export function computeStairs(st: Stairs, project: Project): StairsCalc | null {
     edgeOpenings,
     baseFrontLf,
     footprint,
+    midSupports,
   }
 }

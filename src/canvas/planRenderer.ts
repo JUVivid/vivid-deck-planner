@@ -571,6 +571,18 @@ export function renderPlan(
         const tt = 0.06 + t * 0.88
         line(lerp(c0, c1, tt), lerp(c3, c2, tt))
       }
+      // mid-span stringer girder + 6x6 posts (tall flights)
+      for (const ms of sc.midSupports) {
+        ctx.strokeStyle = C.beam
+        ctx.lineWidth = Math.max(2.5, (3 / 12) * s)
+        line(ms.a, ms.b)
+        ctx.fillStyle = C.post
+        const px = Math.max(3, (5.5 / 12) * s)
+        for (const p of ms.posts) {
+          const q = W(p)
+          ctx.fillRect(q.x - px / 2, q.y - px / 2, px, px)
+        }
+      }
     }
     if (state.layers.decking) {
       // per-tread picture frame: side border boards run down the stringers,

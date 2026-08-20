@@ -601,6 +601,30 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
       })
     }
     acc({ section: S.stairs, item: 'LSCZ stringer connector', sku: 'hw:lscz', detail: `${label} — hangs each stringer off the rim/header`, qty: sc.stringerCount, unit: 'ea' })
+    // mid-span stringer supports: girder + 6x6 posts + footings, like any girder
+    for (const ms of sc.midSupports) {
+      const girderLen = sc.attachWidthFt + 0.5
+      cut(S.stairs, sSpecies, sc.tier.framing.beamSize, girderLen, `${label} — mid-span stringer girder @ ${ftIn(ms.xFt)} out (2-ply)`, 2)
+      tapeDoubleLf += girderLen
+      cut(S.stairs, sSpecies, '6x6', ms.postTopFt + 0.5, `${label} — mid-span girder posts`, ms.posts.length)
+      acc({ section: S.hardware, item: 'ABA66Z post base', sku: 'hw:aba66z', detail: `${label} — stair girder post bases`, qty: ms.posts.length, unit: 'ea' })
+      acc({ section: S.hardware, item: '1/2" x 5-1/2" concrete anchor bolt + washer', sku: 'hw:anchor-bolt', detail: `${label} — stair girder post anchors`, qty: ms.posts.length, unit: 'ea' })
+      acc({ section: S.hardware, item: 'BCS2-3/6 post cap', sku: 'hw:bcs2', detail: `${label} — stair girder post caps`, qty: ms.posts.length, unit: 'ea' })
+      acc({ section: S.hardware, item: 'H2.5A hurricane tie', sku: 'hw:h25a', detail: `${label} — each stringer tied to the mid-span girder`, qty: sc.stringerCount, unit: 'ea' })
+      // footings: Ø12 tubes to frost depth under each post
+      const rFt = 12 / 24
+      const volCf = ms.posts.length * Math.PI * rFt * rFt * ((project.settings.frostDepth + 6) / 12)
+      acc({
+        section: S.concrete,
+        item: '80 lb concrete bag',
+        sku: 'yard:SAKRETE 80lb High Strength',
+        detail: `${label} — ${ms.posts.length} girder footings Ø12", ${project.settings.frostDepth}" deep`,
+        qty: volCf / 0.6,
+        unit: 'bags',
+        note: 'Or ready-mix.',
+      })
+      acc({ section: S.concrete, item: 'Concrete tube form Ø12" x 48"', sku: 'misc:tube-12', detail: `${label} — mid-span girder footings`, qty: ms.posts.length, unit: 'ea' })
+    }
     // the rim carrying the stringers gets doubled across the opening (header);
     // attachWidthFt already covers every leg of a wrapped span
     const headerLen = sc.attachWidthFt + 2
