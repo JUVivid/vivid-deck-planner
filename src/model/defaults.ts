@@ -41,6 +41,9 @@ export function defaultDecking(): DeckingConfig {
     angle: 0,
     pictureFrame: 1,
     pfProfileId: null,
+    pfColorId: null,
+    breakerColorId: null,
+    fasciaColorId: null,
     breakers: 'auto',
     breakerStations: [],
     stockLengths: [12, 16, 20],
@@ -173,6 +176,9 @@ export function migrateProject(raw: unknown): Project | null {
     for (const t of proj.tiers) {
       if (!Array.isArray(t.decking.breakerStations)) t.decking.breakerStations = []
       if (t.decking.pfProfileId === undefined) t.decking.pfProfileId = null
+      if (t.decking.pfColorId === undefined) t.decking.pfColorId = null
+      if (t.decking.breakerColorId === undefined) t.decking.breakerColorId = null
+      if (t.decking.fasciaColorId === undefined) t.decking.fasciaColorId = null
       // waste is the company allowance now — reps never set it per tier
       delete (t.decking as { wasteFactor?: number }).wasteFactor
     }

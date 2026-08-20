@@ -30,8 +30,10 @@ export interface DeckingResult {
   areaSqft: number
   /** stations along the joist u-axis where breaker boards need flanking support joists */
   breakerUs: number[]
-  /** cut lengths (ft) for field + breaker boards */
+  /** cut lengths (ft) for field boards */
   fieldCuts: number[]
+  /** cut lengths (ft) for breaker (parting) boards — orderable in their own color */
+  breakerCuts: number[]
   /** cut lengths (ft) for picture-frame boards (color-matched, mitred) */
   frameCuts: number[]
   insetFailed: boolean
@@ -67,6 +69,7 @@ export function computeDecking(tier: Tier): DeckingResult {
     areaSqft: Math.abs(polygonArea(poly)),
     breakerUs: [],
     fieldCuts: [],
+    breakerCuts: [],
     frameCuts: [],
     insetFailed: false,
     boardDirOk: true,
@@ -156,7 +159,7 @@ export function computeDecking(tier: Tier): DeckingResult {
         const len = Math.hypot(sg.b.x - sg.a.x, sg.b.y - sg.a.y)
         if (len < 0.15) continue
         res.boards.push({ a: sg.a, b: sg.b, widthIn: boardWidth, kind: 'breaker', len })
-        res.fieldCuts.push(len)
+        res.breakerCuts.push(len)
         res.breakerLines.push({ t, a: sg.a, b: sg.b, manualIndex })
       }
       // u station for joist doubling

@@ -21,6 +21,7 @@ import {
 } from '../catalog/timbertech'
 import {
   WIDE_PF_WIDTH_IN,
+  fasciaColors,
   fastenerBlockReason,
   infillBlockReason,
   pfProfileOptions,
@@ -32,6 +33,40 @@ import { dist } from '../geometry/geom'
 import { ftIn, ftInlabel } from './format'
 import { Field, LenInput, Row, Section } from './inputs'
 import { useComputed } from './useComputed'
+
+/**
+ * Accent color picker (picture frame / breaker / fascia). Options come from
+ * THIS collection only — families never mix on one deck, so picking from a
+ * different line is impossible by construction. Empty = match the decking.
+ */
+function AccentColorSelect({
+  label,
+  value,
+  palette,
+  fieldColor,
+  onChange,
+}: {
+  label: string
+  value: string | null
+  palette: string[]
+  fieldColor: string
+  onChange: (v: string | null) => void
+}) {
+  return (
+    <Field label={label} hint="same collection as the decking">
+      <select value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}>
+        <option value="">Match decking ({fieldColor})</option>
+        {palette
+          .filter((c) => c !== fieldColor)
+          .map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+      </select>
+    </Field>
+  )
+}
 
 export function PropertiesPanel() {
   const selection = useApp((s) => s.selection)
@@ -280,7 +315,7 @@ function DeckingSection({ tier }: { tier: Tier }) {
   const computed = useComputed()
   const dkParts = computed.byTier.get(tier.id)?.decking
   const d = tier.decking
-  const { line, profile, pfProfile, fastener } = resolveDecking(tier)
+  const { line, profile, pfProfile, fastener, color } = resolveDecking(tier)
   const colors = profileColors(line, profile)
   const isPorch = line.material === 'porch'
   const stations = d.breakerStations ?? []
@@ -435,6 +470,13 @@ function DeckingSection({ tier }: { tier: Tier }) {
                 )}
               </select>
             </Field>
+            <AccentColorSelect
+              label="Picture frame color"
+              value={d.pfColorId}
+              palette={profileColors(line, pfProfile)}
+              fieldColor={color}
+              onChange={(v) => set((t) => (t.decking.pfColorId = v))}
+            />
           </Row>
           {!line.profiles.some((p) => p.widthIn >= WIDE_PF_WIDTH_IN) && (
             <div className="hint-line">
@@ -445,6 +487,17 @@ function DeckingSection({ tier }: { tier: Tier }) {
       )}
       {!isPorch && (
         <div className="breaker-box">
+          {(d.breakers === 'auto' || stations.length > 0) && (
+            <Row>
+              <AccentColorSelect
+                label="Breaker board color"
+                value={d.breakerColorId}
+                palette={colors}
+                fieldColor={color}
+                onChange={(v) => set((t) => (t.decking.breakerColorId = v))}
+              />
+            </Row>
+          )}
           <div className="btn-row">
             <button
               disabled={!dkParts?.breakersAllowed}
@@ -475,6 +528,17 @@ function DeckingSection({ tier }: { tier: Tier }) {
             <div className="field-hint">Breaker boards apply when decking runs perpendicular to the joists.</div>
           )}
         </div>
+      )}
+      {line.fascia && (
+        <Row>
+          <AccentColorSelect
+            label="Fascia color"
+            value={d.fasciaColorId}
+            palette={fasciaColors(line)}
+            fieldColor={color}
+            onChange={(v) => set((t) => (t.decking.fasciaColorId = v))}
+          />
+        </Row>
       )}
       <div className="field-hint">
         Orders from manufacturer lengths: {profile.lengthsFt.map((L) => `${L}'`).join(' / ')} · company waste allowance

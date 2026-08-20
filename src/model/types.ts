@@ -52,6 +52,14 @@ export interface DeckingConfig {
    * as the field). Lets a wide 1x8 (7.25") border ring a 1x6 field.
    */
   pfProfileId: string | null
+  /**
+   * Accent colors — picture frame, breaker boards and fascia MATCH the field
+   * color by default (null) but can each be changed. Always locked to the SAME
+   * collection as the field: families never mix on one deck.
+   */
+  pfColorId: string | null
+  breakerColorId: string | null
+  fasciaColorId: string | null
   breakers: 'none' | 'auto'
   /** manual breaker-board stations, as fraction 0..1 along the board-run axis */
   breakerStations: number[]

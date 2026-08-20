@@ -203,28 +203,33 @@ export function renderPlan(
     // framing
     if (state.layers.framing && parts) {
       const fr = parts.framing
-      // joists — added seam-support joists (breaker pairs, picture-frame) are
-      // real members and draw in their own color so the support reads clearly
+      // joists — seam-support joists (breaker pairs, picture-frame sisters)
+      // are ordinary JOISTS, drawn like joists but slightly heavier. Only real
+      // between-joist blocking gets the teal treatment: the picture frame
+      // takes blocking on the two sides ACROSS the joists, and sistered
+      // joists (not blocking) on the two sides along them.
       for (const j of fr.joists) {
-        ctx.strokeStyle = j.kind === 'breaker' ? '#7a5a2e' : j.kind === 'pf' ? '#5f9ea0' : C.joist
-        ctx.lineWidth = Math.max(1, 0.125 * s) * (j.kind === 'field' ? 1 : 1.25)
+        ctx.strokeStyle = j.kind === 'breaker' ? '#7a5a2e' : C.joist
+        ctx.lineWidth = Math.max(1, 0.125 * s) * (j.kind === 'field' ? 1 : 1.35)
         line(j.a, j.b)
       }
       // blocking — drawn on top of joists, solid & clear (between-joist members)
       ctx.strokeStyle = C.blocking
       ctx.lineWidth = Math.max(1.5, 0.14 * s)
       for (const row of fr.blocking) for (const sg of row.segs) line(sg.a, sg.b)
-      // picture-frame border blocking (distinct green-gray)
-      if (fr.pfBlocking.length > 0) {
-        ctx.strokeStyle = '#5f9ea0'
-        ctx.lineWidth = Math.max(1.5, 0.14 * s)
-        for (const row of fr.pfBlocking) for (const sg of row.segs) line(sg.a, sg.b)
-      }
       // beams
       ctx.strokeStyle = C.beam
       for (const bm of fr.beams) {
         ctx.lineWidth = Math.max(2.5, ((tier.framing.beamPly * 1.5) / 12) * s)
         line(bm.seg.a, bm.seg.b)
+      }
+      // picture-frame border blocking (distinct green-gray) — AFTER the beams:
+      // the border seam often lands within inches of a beam line, and the beam
+      // stroke used to paint right over it
+      if (fr.pfBlocking.length > 0) {
+        ctx.strokeStyle = '#5f9ea0'
+        ctx.lineWidth = Math.max(1.5, 0.14 * s)
+        for (const row of fr.pfBlocking) for (const sg of row.segs) line(sg.a, sg.b)
       }
       // ledger / rim
       ctx.strokeStyle = C.rim

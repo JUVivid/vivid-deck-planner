@@ -356,6 +356,9 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
     }
 
     // ---- decking boards ----
+    // Field, breaker and picture-frame boards each carry THEIR OWN color (all
+    // from the same collection — families never mix). When an accent matches
+    // the field, identical item + SKU merge back into one order line.
     const stocks = tier.decking.stockLengths.length > 0 ? tier.decking.stockLengths : rd.profile.lengthsFt
     const pack = packCuts(dk.fieldCuts, stocks)
     for (const [stock, count] of [...pack.byStock].sort((a, b) => a[0] - b[0])) {
@@ -368,6 +371,19 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
         unit: 'ea',
       })
     }
+    if (dk.breakerCuts.length > 0) {
+      const bpack = packCuts(dk.breakerCuts, stocks)
+      for (const [stock, count] of [...bpack.byStock].sort((a, b) => a[0] - b[0])) {
+        acc({
+          section: S.decking,
+          item: `${rd.line.name} — ${rd.breakerColor}, ${rd.profile.name} x ${stock}'`,
+          sku: `decking:${rd.line.id}|${profileKind(rd.profile)}|${rd.breakerColor}|${stock}`,
+          detail: `${tier.name} breaker (parting) boards`,
+          qty: count,
+          unit: 'ea',
+        })
+      }
+    }
     if (dk.frameCuts.length > 0) {
       // border boards may be a wider profile than the field (e.g. a 1x8 border
       // around a 1x6 field) — order them on their own stock lengths
@@ -377,8 +393,8 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
       for (const [stock, count] of [...fpack.byStock].sort((a, b) => a[0] - b[0])) {
         acc({
           section: S.decking,
-          item: `${productName}, ${rd.pfProfile.name} x ${stock}'`,
-          sku: `decking:${rd.line.id}|${profileKind(rd.pfProfile)}|${rd.color}|${stock}`,
+          item: `${rd.line.name} — ${rd.pfColor}, ${rd.pfProfile.name} x ${stock}'`,
+          sku: `decking:${rd.line.id}|${profileKind(rd.pfProfile)}|${rd.pfColor}|${stock}`,
           detail: `${tier.name} ${ringLabel} (mitred) — ${ftIn(tier.decking.pictureFrame * dk.pfPitchFt)} wide border`,
           qty: count,
           unit: 'ea',
@@ -469,8 +485,8 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
     if (tp.fasciaLf > 0.5 && rd.line.fascia) {
       acc({
         section: S.decking,
-        item: `${rd.line.name} fascia ${rd.line.fascia.widthIn}" x 12' — ${rd.color}`,
-        sku: `fascia:${rd.line.id}|${rd.color}|12`,
+        item: `${rd.line.name} fascia ${rd.line.fascia.widthIn}" x 12' — ${rd.fasciaColor}`,
+        sku: `fascia:${rd.line.id}|${rd.fasciaColor}|12`,
         detail: `${tier.name} fascia wrap`,
         qty: tp.fasciaLf / 12,
         unit: 'ea',

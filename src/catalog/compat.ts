@@ -23,6 +23,15 @@ export interface Resolved {
   pfProfile: BoardProfile
   fastener: FastenerSystem
   color: string
+  /** accent colors — default to `color`, always from the SAME line (families never mix) */
+  pfColor: string
+  breakerColor: string
+  fasciaColor: string
+}
+
+/** colors offered for a line's fascia boards (falls back to the line palette) */
+export function fasciaColors(line: DeckingLine): string[] {
+  return line.fascia?.colors ?? line.colors
 }
 
 /** Resolve a tier's decking selection against the catalog (falls back hard). */
@@ -34,7 +43,13 @@ export function resolveDecking(tier: Tier): Resolved {
   const fastener = fastenerById(tier.decking.fastenerId) ?? validFasteners(line, profile)[0] ?? FASTENERS[0]
   const colors = profileColors(line, profile)
   const color = colors.includes(tier.decking.colorId) ? tier.decking.colorId : colors[0]
-  return { line, profile, pfProfile, fastener, color }
+  // accents: match the field unless a valid same-line color was chosen
+  const pick = (id: string | null | undefined, palette: string[]): string =>
+    id && palette.includes(id) ? id : color
+  const pfColor = pick(tier.decking.pfColorId, profileColors(line, pfProfile))
+  const breakerColor = pick(tier.decking.breakerColorId, colors)
+  const fascColor = pick(tier.decking.fasciaColorId, fasciaColors(line))
+  return { line, profile, pfProfile, fastener, color, pfColor, breakerColor, fasciaColor: fascColor }
 }
 
 /** Nominal 1x8 board width — the wide picture-frame border option. */
@@ -158,6 +173,33 @@ export function normalizeDecking(tier: Tier): string[] {
     tier.decking.pfProfileId = null // normalize undefined (older saves)
   }
 
+  // accent colors (picture frame / breakers / fascia) are FAMILY-LOCKED: they
+  // may only be colors of THIS line. Anything else (typically after switching
+  // collections) falls back to matching the field color.
+  const pfProf = (tier.decking.pfProfileId ? profileById(line, tier.decking.pfProfileId) : null) ?? profile!
+  const clampAccent = (
+    key: 'pfColorId' | 'breakerColorId' | 'fasciaColorId',
+    palette: string[],
+    label: string,
+  ) => {
+    const id = tier.decking[key] ?? null
+    if (id === null) {
+      tier.decking[key] = null // normalize undefined (older saves)
+      return
+    }
+    if (id === tier.decking.colorId) {
+      tier.decking[key] = null // matches the field: no override needed
+      return
+    }
+    if (!palette.includes(id)) {
+      tier.decking[key] = null
+      msgs.push(`${id} is not offered for the ${line.name} ${label} — back to matching the decking.`)
+    }
+  }
+  clampAccent('pfColorId', profileColors(line, pfProf), 'picture frame')
+  clampAccent('breakerColorId', profileColors(line, profile!), 'breaker boards')
+  clampAccent('fasciaColorId', fasciaColors(line), 'fascia')
+
   // porch boards: no picture frame / breakers (T&G field runs continuous)
   if (line.material === 'porch') {
     if (tier.decking.pictureFrame !== 0) {
@@ -165,6 +207,8 @@ export function normalizeDecking(tier: Tier): string[] {
       msgs.push('Picture frames are not used with T&G porch boards.')
     }
     tier.decking.pfProfileId = null
+    tier.decking.pfColorId = null
+    tier.decking.breakerColorId = null
     tier.decking.breakers = 'none'
   }
   return msgs

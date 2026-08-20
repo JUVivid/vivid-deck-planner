@@ -226,9 +226,12 @@ export function buildQuote(
     const rd = resolveDecking(t)
     const feature: string[] = []
     if (t.decking.pictureFrame > 0) {
-      feature.push(`${t.decking.pictureFrame === 2 ? 'double' : 'single'} picture-frame border`)
+      const accent = rd.pfColor !== rd.color ? ` in ${rd.pfColor}` : ''
+      feature.push(`${t.decking.pictureFrame === 2 ? 'double' : 'single'} picture-frame border${accent}`)
     }
     if (t.decking.angle === 45) feature.push('45° diagonal pattern')
+    if (rd.breakerColor !== rd.color) feature.push(`${rd.breakerColor} inlay boards`)
+    if (rd.fasciaColor !== rd.color && rd.line.fascia) feature.push(`${rd.fasciaColor} fascia`)
     deckSpecs.push({
       label: project.tiers.length > 1 ? t.name : 'Decking',
       value: `${rd.line.name} · ${rd.color} · ${rd.profile.name}${feature.length ? ` · ${feature.join(', ')}` : ''}`,

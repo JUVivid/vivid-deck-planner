@@ -318,6 +318,87 @@ describe('stair treads are fully covered by real boards', () => {
   })
 })
 
+describe('picture-frame support: blocking on TWO sides only', () => {
+  it('borders across the joists get blocking; borders along them get sistered joists', () => {
+    const p = rectDeck(16, 12) // joists N–S (dir 90 pinned by rectDeck defaults)
+    const tc = [...computeProject(p).byTier.values()][0]
+    const fr = tc.framing
+    // exactly the two E–W border seams (N + S edges) get blocking rows
+    expect(fr.pfBlocking.length).toBe(2)
+    for (const row of fr.pfBlocking) {
+      for (const sg of row.segs) expect(Math.abs(sg.b.y - sg.a.y)).toBeLessThan(0.05) // rows run E–W
+    }
+    // the two N–S border seams get REAL sistered joists, not blocking
+    expect(fr.pfJoists).toBe(2)
+    expect(fr.joists.filter((j) => j.kind === 'pf').length).toBe(2)
+  })
+})
+
+describe('accent colors (picture frame / breakers / fascia) — family-locked', () => {
+  const withAccents = () => {
+    const p = rectDeck(16, 12)
+    const d = p.tiers[0].decking
+    // Legacy field in Espresso; accents in other LEGACY colors
+    d.pfColorId = 'Mocha'
+    d.breakerColorId = 'Tigerwood'
+    d.fasciaColorId = 'Pecan'
+    d.breakers = 'auto'
+    d.breakerStations = [0.5] // force a breaker board
+    return p
+  }
+
+  it('defaults MATCH the field color — one merged order line, nothing new', () => {
+    const plain = computeProject(rectDeck(16, 12))
+    const deckLines = plain.bom.filter((l) => l.sku && l.sku.startsWith('decking:'))
+    // every decking sku carries the field color when no accent is set
+    for (const l of deckLines) expect(l.sku).toContain('|Espresso|')
+    const fascia = plain.bom.find((l) => l.sku && l.sku.startsWith('fascia:'))!
+    expect(fascia.sku).toContain('|Espresso|')
+  })
+
+  it('each accent orders its own color from the SAME collection', () => {
+    const c = computeProject(withAccents())
+    const skus = c.bom.filter((l) => l.sku).map((l) => l.sku!)
+    expect(skus.some((s) => s.startsWith('decking:legacy|') && s.includes('|Mocha|'))).toBe(true) // picture frame
+    expect(skus.some((s) => s.startsWith('decking:legacy|') && s.includes('|Tigerwood|'))).toBe(true) // breakers
+    expect(skus.some((s) => s.startsWith('fascia:legacy|Pecan|'))).toBe(true)
+    // field stays Espresso
+    const field = c.bom.find((l) => l.detail.includes('field boards'))!
+    expect(field.sku).toContain('|Espresso|')
+    // and the customer quote names the accents without leaking anything else
+    const deckSec = c.quote.sections.find((s) => s.id === 'deck')!
+    const text = deckSec.specs.map((s) => s.value).join(' ')
+    expect(text).toContain('Mocha')
+    expect(text).toContain('Tigerwood')
+    expect(text).toContain('Pecan')
+  })
+
+  it('families NEVER mix: a foreign-line color resets to matching the decking', async () => {
+    const { normalizeDecking } = await import('../src/catalog/compat')
+    const p = withAccents()
+    const d = p.tiers[0].decking
+    d.pfColorId = 'Dark Hickory' // a Vintage color — not offered in Legacy
+    const msgs = normalizeDecking(p.tiers[0])
+    expect(d.pfColorId).toBe(null)
+    expect(msgs.join(' ')).toMatch(/not offered/)
+    // switching collections re-locks every accent to the new family
+    d.pfColorId = 'Mocha'
+    d.breakerColorId = 'Tigerwood'
+    d.lineId = 'terrain-plus'
+    normalizeDecking(p.tiers[0])
+    expect(d.pfColorId).toBe(null)
+    expect(d.breakerColorId).toBe(null)
+  })
+
+  it('an accent set to the field color normalizes back to "match"', async () => {
+    const { normalizeDecking } = await import('../src/catalog/compat')
+    const p = rectDeck(16, 12)
+    p.tiers[0].decking.breakerColorId = 'Espresso' // same as field
+    normalizeDecking(p.tiers[0])
+    expect(p.tiers[0].decking.breakerColorId).toBe(null)
+  })
+})
+
 describe('picture-frame border board (1x8 option)', () => {
   function vintageDeck(pfProfileId: string | null, rings: 0 | 1 | 2) {
     const p = rectDeck(16, 12)
