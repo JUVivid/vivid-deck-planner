@@ -87,7 +87,7 @@ export interface QuoteResult {
 }
 
 /** Infills billed at the specialty railing rate. */
-const SPECIALTY_INFILL = new Set(['cable-horizontal', 'cable-vertical', 'glass'])
+export const SPECIALTY_INFILL = new Set(['cable-horizontal', 'cable-vertical', 'glass'])
 
 type Cat = 'deck' | 'railing' | 'stairs' | 'lighting' | 'demo'
 

@@ -94,4 +94,5 @@ export function computeProject(project: Project): ProjectComputed {
 }
 
 export { bomToCsv }
+export { jobTreadCsv, jobTreadCsvFilename, buildJobTreadRows, JOBTREAD_HEADER } from './jobtread'
 export type { BomLine, Check, LumberPlan, StairsCalc, FramingResult, DeckingResult, RailingResult, QuoteResult }

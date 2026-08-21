@@ -1,5 +1,5 @@
 import { useApp } from '../model/store'
-import { bomToCsv, type LumberPlan } from '../engine'
+import { bomToCsv, jobTreadCsv, jobTreadCsvFilename, type LumberPlan } from '../engine'
 import { DISCLAIMER } from '../codes/tables'
 import { download, orderCsvFilename } from './download'
 import { fmtQty, ftIn } from './format'
@@ -25,11 +25,15 @@ export function MaterialsPanel() {
 
   const sections = [...new Set(bom.map((l) => l.section))]
 
-  // creates a real .csv file in Downloads (clipboard copy stays as a fallback)
-  const downloadCsv = () => download(orderCsvFilename(project.name), bomToCsv(bom, project.name, cutPlans), 'text/csv')
+  // JobTread cost-group template (the company's catalog-template.csv layout):
+  // every material line, the yard tax, labour, permit and drawings as cost
+  // items at the company margin — import it straight into JobTread
+  const downloadJobTread = () => download(jobTreadCsvFilename(project.name), jobTreadCsv(project, computed), 'text/csv')
+  // the plain supplier order list (with the lumber cut plan) for the yard
+  const downloadOrder = () => download(orderCsvFilename(project.name), bomToCsv(bom, project.name, cutPlans), 'text/csv')
   const copyCsv = async () => {
     try {
-      await navigator.clipboard.writeText(bomToCsv(bom, project.name, cutPlans))
+      await navigator.clipboard.writeText(jobTreadCsv(project, computed))
     } catch {
       /* clipboard unavailable — the download button is the primary path */
     }
@@ -57,10 +61,13 @@ export function MaterialsPanel() {
       </div>
 
       <div className="btn-row">
-        <button className="primary" onClick={downloadCsv}>
-          Download order (.csv)
+        <button className="primary" onClick={downloadJobTread} title="JobTread cost-group template: materials, tax, labour, permit and drawings at the company margin">
+          Download JobTread import (.csv)
         </button>
-        <button onClick={copyCsv} title="Copy the CSV text to the clipboard instead of saving a file">
+        <button onClick={downloadOrder} title="Plain supplier order list with the lumber cut plan">
+          Supplier order (.csv)
+        </button>
+        <button onClick={copyCsv} title="Copy the JobTread CSV text to the clipboard instead of saving a file">
           Copy
         </button>
       </div>

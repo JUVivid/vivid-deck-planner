@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { newTier, blankProject, demoProject, migrateProject, uid } from '../src/model/defaults'
-import { computeProject } from '../src/engine'
+import { computeProject, buildJobTreadRows, jobTreadCsv, JOBTREAD_HEADER } from '../src/engine'
 import { unitCostFor } from '../src/engine/pricing'
 import { clipLineToPoly, insetPolygon, pointInPolygon, polygonArea } from '../src/geometry/geom'
 import { ftIn, parseLen } from '../src/ui/format'
@@ -1895,5 +1895,89 @@ describe('quote pricing integrity — receipts attach, unpriced never quotes low
       expect(endPost.pos.y).toBeGreaterThanOrEqual(rl.railInsetFt - 1e-6)
       expect(endPost.pos.y).toBeLessThan(rl.railInsetFt + 0.01)
     }
+  })
+})
+
+describe('JobTread catalog export — catalog-template.csv, every item', () => {
+  // the company's JobTread template header, verbatim
+  const TEMPLATE_HEADER =
+    'Cost Group Template Name,Cost Group Name,Cost Item Name,Description,Quantity,Quantity Formula,Unit,Unit Cost,Unit Cost Formula,Unit Price,Unit Price Formula,Margin,Cost Type,Cost Code,Taxable,Selected,Minimum Selections,Maximum Selections,Allowance Type,Allows Customer Write-In,Specification,Require Specification Approval,Show Child Costs,Show Child Deltas,Show Children,Show Description,Show Quantity,Custom Field: Status'
+  const parse = (line: string) => line.slice(1, -1).split('","').map((f) => f.replace(/""/g, '"'))
+
+  it("header matches JobTread's template column for column", () => {
+    expect(JOBTREAD_HEADER.join(',')).toBe(TEMPLATE_HEADER)
+    const p = demoProject()
+    const csv = jobTreadCsv(p, computeProject(p))
+    expect(parse(csv.split('\r\n')[0]).join(',')).toBe(TEMPLATE_HEADER)
+  })
+
+  it('every estimate item is a row: materials + yard tax per group + labour + permit + drawings', () => {
+    const p = demoProject()
+    const c = computeProject(p)
+    const rows = buildJobTreadRows(p, c)
+    const materialLines = c.bom.filter((l) => !l.informational)
+    expect(rows.filter((r) => r.costType === 'Material').length).toBe(materialLines.length)
+    // one tax row per material group (the demo prices everything)
+    const groups = new Set(materialLines.map((l) => l.section))
+    expect(rows.filter((r) => r.name.startsWith('NC sales tax')).length).toBe(groups.size)
+    // labour: decking per tier, one railing run, one per stair
+    const railLf = [...c.byTier.values()].reduce((s, t) => s + t.railing.totalLf, 0)
+    const expectedLabor = p.tiers.length + (railLf > 0.5 ? 1 : 0) + c.stairs.filter((s) => s.ok).length
+    expect(rows.filter((r) => r.costType === 'Labor').length).toBe(expectedLabor)
+    expect(rows.filter((r) => r.group === 'Permits & Drawings').map((r) => r.name)).toEqual(['Building permit', 'Engineered drawings'])
+    for (const r of rows) expect(['Material', 'Labor', 'Other']).toContain(r.costType)
+    // groups carry the order sections' names without the numbering
+    expect(rows[0].group).toBe('Framing Lumber')
+  })
+
+  it('the items reproduce the customer quote: Σ qty × price at the 45% margin = quote total', () => {
+    const p = demoProject()
+    const c = computeProject(p)
+    expect(c.quote.total).not.toBeNull()
+    const rows = buildJobTreadRows(p, c)
+    expect(rows.every((r) => r.unitCost !== null)).toBe(true)
+    const sell = rows.reduce((s, r) => s + r.qty * ((r.unitCost as number) / 0.55), 0)
+    expect(Math.abs(sell - (c.quote.total as number))).toBeLessThan(2) // per-line rounding only
+  })
+
+  it('every row has all 28 columns: FALSE taxable, 45% margin, explicit price, template name', () => {
+    const p = demoProject()
+    const c = computeProject(p)
+    const lines = jobTreadCsv(p, c, { date: new Date(2026, 7, 21) }).split('\r\n')
+    expect(lines.length).toBe(buildJobTreadRows(p, c).length + 1)
+    for (const line of lines.slice(1)) {
+      const f = parse(line)
+      expect(f.length).toBe(28)
+      expect(f[0]).toMatch(/Vivid Deck Planner 2026-08-21$/)
+      expect(f[11]).toBe('45%') // Margin
+      expect(f[14]).toBe('FALSE') // Taxable — never charged to the customer
+      expect(f[15]).toBe('TRUE') // Selected
+      expect(Number(f[9])).toBeCloseTo(Number(f[7]) / 0.55, 2) // price from cost at the margin
+    }
+  })
+
+  it('an unpriced line exports a blank cost with a PRICE NEEDED flag — never a silent $0', () => {
+    const p = rectDeck(25, 15, 7) // 26' special-order sticks have no price on file
+    const c = computeProject(p)
+    const rows = buildJobTreadRows(p, c)
+    const special = rows.find((r) => r.name.includes('special order'))!
+    expect(special.unitCost).toBeNull()
+    expect(special.description).toContain('[PRICE NEEDED')
+    const row = jobTreadCsv(p, c).split('\r\n').find((l) => l.includes('special order'))!
+    const f = parse(row)
+    expect(f[7]).toBe('')
+    expect(f[9]).toBe('')
+    expect(f[11]).toBe('')
+  })
+
+  it('Mecklenburg jobs: the permit carries the zoning review and tax rows use 8.25%', () => {
+    const p = demoProject()
+    p.settings.quote.mecklenburg = true
+    const c = computeProject(p)
+    const rows = buildJobTreadRows(p, c)
+    const permit = rows.find((r) => r.name.startsWith('Building permit'))!
+    expect(permit.name).toContain('Mecklenburg')
+    expect(permit.unitCost).toBe(350 + 65)
+    expect(rows.find((r) => r.name.startsWith('NC sales tax'))!.name).toContain('8.25%')
   })
 })
