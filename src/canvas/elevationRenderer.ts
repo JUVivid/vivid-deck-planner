@@ -523,19 +523,26 @@ export function renderElevation(
             const py0 = yInfillBot
             const py1 = Math.min(yInfillTop, yInfillBot + side)
             const h = py1 - py0
-            const bw = 1.25 / 12
+            // the flanking balusters ARE the kit's standard balusters — same
+            // member width and the same design gap as the plain-baluster
+            // section, so they never change size with the panel selected
+            const balInf = rsys.infills.find((i) => i.kind === 'baluster')
+            const bw = (balInf?.memberWidthIn ?? 1.25) / 12
+            const bwPx = Math.max(1, bw * scale)
+            const kitN = balInf?.balustersPer[secLenKey] ?? 13
+            const gap = Math.max(0.05, (secLenKey - kitN * bw) / (kitN + 1))
             ctx.fillStyle = '#5b81b8'
             for (const [rx0, rx1] of [
               [inX0, px0],
               [px0 + pw, inX1],
             ] as [number, number][]) {
               const rc = rx1 - rx0
-              if (rc < bw * 1.5) continue
-              const n = Math.max(1, Math.round((rc * 12) / 4.75))
+              const n = Math.max(0, Math.floor((rc - gap) / (bw + gap) + 1e-6))
+              if (n === 0) continue
               const step = (rc - n * bw) / (n + 1)
               for (let i2 = 1; i2 <= n; i2++) {
                 const bx = rx0 + step * i2 + bw * (i2 - 1) + bw / 2
-                ctx.fillRect(X(bx) - memberW / 2, Y(yInfillTop), memberW, (yInfillTop - yInfillBot) * scale)
+                ctx.fillRect(X(bx) - bwPx / 2, Y(yInfillTop), bwPx, (yInfillTop - yInfillBot) * scale)
               }
             }
             drawDecoPanel(ctx, rinf.id.includes('web') ? 'square-web' : 'chippendale', X(px0), Y(py1), pw * scale, h * scale, '#5b81b8')
@@ -854,10 +861,14 @@ export function renderElevation(
         band((x) => zNose(x) + guardFt, topHFt)
         ctx.fillStyle = railFill
         band((x) => zNose(x) + botGapFt + botHFt, botHFt)
-        // balusters between the rakes
+        // balusters between the rakes — the system's own baluster (width and
+        // the 6' stair kit's count, scaled to the rake length)
+        const rinfS = rsys.infills.find((i) => i.id === rcfg.infillId) ?? rsys.infills[0]
+        const balInfS = rinfS.kind === 'baluster' || rinfS.kind === 'open-mid' ? rinfS : (rsys.infills.find((i) => i.kind === 'baluster') ?? rinfS)
         ctx.strokeStyle = '#5b81b8'
-        ctx.lineWidth = Math.max(1, (0.75 / 12) * scale)
-        const nBal = Math.max(2, Math.floor((rakeHoriz * 12) / 4.75))
+        ctx.lineWidth = Math.max(1, ((balInfS.memberWidthIn || 0.75) / 12) * scale)
+        const kitN6 = balInfS.balustersPer[6] ?? Math.max(2, Math.round(72 / 4.75))
+        const nBal = Math.max(2, Math.round((kitN6 * rakeSlope) / 6) + 1)
         for (let i2 = 1; i2 < nBal; i2++) {
           const xb = topSx + sgn * rakeHoriz * (i2 / nBal)
           ctx.beginPath()
@@ -897,23 +908,56 @@ export function renderElevation(
         for (const n of midTreads) drawPost(treadCenter(n), treadZ(n))
         drawPost(xBot, treadZ(nBot))
       }
-    } else if (towards > 0.7) {
-      // facing the viewer: every riser board is a full face and each tread
-      // shows its nosing edge across the width; the stringers sit BEHIND the
-      // risers and are ghosted through so the count still cross-checks the order
+    } else if (Math.abs(towards) > 0.7) {
+      // the flight points at the viewer (front) or away (back). Front: every
+      // riser board is a full face with the tread nosings across it. Back: the
+      // flight is BEHIND the deck — only what hangs below the rim shows, and
+      // we see the riser backs (no nosings), ghosted as a far-side object.
+      const back = towards < 0
       const faceW = sc.attachWidthFt
       const faceStringers = sc.stringerCount
       const halfW = faceW / 2
       const landZ = top - sc.rise
+      const joistDS = DEPTH_IN[sc.tier.framing.joistSize] / 12
+      ctx.save()
+      if (back) {
+        ctx.beginPath()
+        ctx.rect(0, Y(top - scDeckThk - joistDS), w, h)
+        ctx.clip()
+        ctx.globalAlpha = 0.55
+      }
+      const drawGirder = () => {
+        for (const ms of sc.midSupports) {
+          const g0 = dot(ms.a, basis.right)
+          const g1 = dot(ms.b, basis.right)
+          const lo = Math.min(g0, g1)
+          const gd = 9.25 / 12
+          ctx.fillStyle = '#e9b36a'
+          ctx.strokeStyle = '#b97f28'
+          ctx.lineWidth = 0.8
+          ctx.fillRect(X(lo), Y(ms.postTopFt + gd), Math.abs(g1 - g0) * scale, gd * scale)
+          ctx.strokeRect(X(lo), Y(ms.postTopFt + gd), Math.abs(g1 - g0) * scale, gd * scale)
+          ctx.fillStyle = '#a97142'
+          const pw = Math.max(3, (5.5 / 12) * scale)
+          for (const p of ms.posts) {
+            const sxP = dot(p, basis.right)
+            ctx.fillRect(X(sxP) - pw / 2, Y(ms.postTopFt), pw, ms.postTopFt * scale)
+          }
+        }
+      }
+      // from the front the mid-span girder and its posts sit BEHIND the closed
+      // risers: draw them first so the riser faces cover them, then ghost them
+      // through afterwards so the support still reads on the drawing
+      if (!back) drawGirder()
       for (let k = 1; k <= sc.riserCount; k++) {
         const zTopR = top - (k - 1) * rFt - scDeckThk // under the tread above
         const zBotR = Math.max(landZ, top - k * rFt) // on the tread below / landing
-        ctx.fillStyle = '#9c6b33'
+        ctx.fillStyle = back ? '#8a5e2c' : '#9c6b33'
         ctx.strokeStyle = '#5e3f1c'
         ctx.lineWidth = 0.8
         ctx.fillRect(X(originSx - halfW), Y(zTopR), faceW * scale, (zTopR - zBotR) * scale)
         ctx.strokeRect(X(originSx - halfW), Y(zTopR), faceW * scale, (zTopR - zBotR) * scale)
-        if (k <= sc.treadCount) {
+        if (!back && k <= sc.treadCount) {
           const zT = top - k * rFt
           ctx.fillStyle = '#c9a86a'
           ctx.strokeStyle = '#8f7038'
@@ -923,7 +967,7 @@ export function renderElevation(
       }
       // stringers ghosted through the risers
       ctx.save()
-      ctx.globalAlpha = 0.3
+      ctx.globalAlpha *= 0.3
       ctx.strokeStyle = '#8a6a3a'
       ctx.lineWidth = Math.max(1, (1.5 / 12) * scale)
       for (let k = 0; k < faceStringers; k++) {
@@ -935,10 +979,19 @@ export function renderElevation(
         ctx.stroke()
       }
       ctx.restore()
+      if (back) {
+        // from behind, the girder stands in front of the downhill risers
+        drawGirder()
+      } else {
+        ctx.save()
+        ctx.globalAlpha = 0.3
+        drawGirder()
+        ctx.restore()
+      }
       // the stair guard's posts stand on the treads at each side of the flight
       // (same placement as the side view: bottom post on the last tread, mids
       // on the tread centre each rake bay lands on), seen here head-on
-      if (sc.guardRequired) {
+      if (sc.guardRequired && !back) {
         const rcfg = project.settings.railing
         const rsys = railSystemById(rcfg.systemId) ?? RAILING_SYSTEMS[0]
         const guardFt = rcfg.heightIn / 12
@@ -972,24 +1025,7 @@ export function renderElevation(
           }
         }
       }
-      // mid-span girder (face-on: full band) + its posts
-      for (const ms of sc.midSupports) {
-        const g0 = dot(ms.a, basis.right)
-        const g1 = dot(ms.b, basis.right)
-        const lo = Math.min(g0, g1)
-        const gd = 9.25 / 12
-        ctx.fillStyle = '#e9b36a'
-        ctx.strokeStyle = '#b97f28'
-        ctx.lineWidth = 0.8
-        ctx.fillRect(X(lo), Y(ms.postTopFt + gd), Math.abs(g1 - g0) * scale, gd * scale)
-        ctx.strokeRect(X(lo), Y(ms.postTopFt + gd), Math.abs(g1 - g0) * scale, gd * scale)
-        ctx.fillStyle = '#a97142'
-        const pw = Math.max(3, (5.5 / 12) * scale)
-        for (const p of ms.posts) {
-          const sxP = dot(p, basis.right)
-          ctx.fillRect(X(sxP) - pw / 2, Y(ms.postTopFt), pw, ms.postTopFt * scale)
-        }
-      }
+      ctx.restore()
     }
     ctx.restore()
   }
