@@ -1871,7 +1871,29 @@ describe('quote pricing integrity — receipts attach, unpriced never quotes low
     const rake = c.bom.find((l) => l.detail.includes('top rail over each stair panel'))!
     expect(rake.qty).toBe(panel.qty) // one rake top per stair panel
     expect(unitCostFor(rake.sku)).toBe(59.73)
+    // stair posts are taller (tread centre sits half a riser under the nosing
+    // line) — IRX buys the 43.5" kit for them, on its own line
     const stairPosts = c.bom.find((l) => l.detail.includes('stair rail bottom posts'))!
-    expect(unitCostFor(stairPosts.sku)).toBe(67.01)
+    expect(stairPosts.item).toMatch(/stair height/)
+    expect(unitCostFor(stairPosts.sku)).toBe(77.01)
+    const deckPosts = c.bom.find((l) => l.item.includes('aluminum post kit') && !l.item.includes('stair'))!
+    expect(unitCostFor(deckPosts.sku)).toBe(67.01)
+  })
+
+  it('a rail run ending at the house wall pulls its end post onto the deck', () => {
+    // 3 railed sides + ledger: the two side runs END at the wall (no corner
+    // post shared there) — their end post must sit inside the deck by the
+    // same inset as the rail's offset from the edge, never on the boundary
+    const p = rectDeck(16, 12)
+    const c = computeProject(p)
+    const rl = [...c.byTier.values()][0].railing
+    const sidePieces = rl.pieces.filter((pc) => pc.edgeIndex === 1 || pc.edgeIndex === 3)
+    expect(sidePieces.length).toBe(2)
+    for (const pc of sidePieces) {
+      const endPost = pc.postRoles[0] === 'end' ? pc.posts[0] : pc.posts[pc.posts.length - 1]
+      // the wall is the y = 0 edge: the end post stands a full inset below it
+      expect(endPost.pos.y).toBeGreaterThanOrEqual(rl.railInsetFt - 1e-6)
+      expect(endPost.pos.y).toBeLessThan(rl.railInsetFt + 0.01)
+    }
   })
 })

@@ -644,7 +644,13 @@ export function renderPlan(
         // top end sits INSIDE the deck at the deck-rail centerline: one shared
         // post — the level run ends on one face, the rake leaves the adjacent face
         const a = add(add(topC, off), mul(sc.outDir, -insetFt))
-        const b = add(botC, off)
+        // every stair post stands CENTERED on a tread: tread n's centre is
+        // (n − ½)·t out from the rim; the bottom post is on the LAST tread
+        const tFt = sc.treadIn / 12
+        const nBot = Math.max(1, sc.treadCount)
+        const onTread = (n: number) => add(add(topC, off), mul(sc.outDir, (n - 0.5) * tFt))
+        const b = onTread(nBot)
+        void botC
         ctx.strokeStyle = rtop.drinkRail ? 'rgba(201,168,106,0.9)' : 'rgba(47,111,214,0.4)'
         ctx.lineWidth = Math.max(2, (rtop.widthIn / 12) * s)
         line(a, b)
@@ -652,12 +658,21 @@ export function renderPlan(
         ctx.lineWidth = 1
         line(a, b)
         // posts at the top and bottom of the run, plus intermediates every 6'
-        // of rake (stair rail sections come 6' — no unsupported full-run rake)
+        // of rake (stair rail sections come 6'), each snapped to its tread centre
         ctx.fillStyle = C.railing
         const rakeSlope = Math.hypot(dist(a, b), sc.rise)
         const stairBays = Math.max(1, Math.ceil(rakeSlope / 6))
         const guardPosts: Pt[] = [a, b]
-        for (let m = 1; m < stairBays; m++) guardPosts.push(lerp(a, b, m / stairBays))
+        const usedTreads = new Set<number>()
+        for (let m = 1; m < stairBays; m++) {
+          const pm = lerp(a, b, m / stairBays)
+          const dRim = dot(sub(pm, topC), sc.outDir)
+          const n = Math.min(nBot, Math.max(1, Math.floor(dRim / tFt) + 1))
+          if (n < nBot && !usedTreads.has(n)) {
+            usedTreads.add(n)
+            guardPosts.push(onTread(n))
+          }
+        }
         for (const p of guardPosts) {
           const q = W(p)
           ctx.fillRect(q.x - postPx / 2, q.y - postPx / 2, postPx, postPx)

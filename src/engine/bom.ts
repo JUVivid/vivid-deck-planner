@@ -694,15 +694,19 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
       const stairPost = resolvePost(system, rcfg.postOptionId, 'end')
       const midPosts = 2 * (stairBays - 1)
       const stairPostQty = (edgeRailed ? 2 : 4) + midPosts
+      // stair posts are TALLER than deck posts: standing on a tread centre they
+      // sit half a riser below the nosing line the rail follows — IRX takes the
+      // 43.5" kit for every stair post (its tallest; a separate order line so
+      // it never merges into the deck run's shorter kit)
       const stairPostSku =
         system.id === 'irx'
-          ? `rail:irx-post|${rcfg.heightIn === 36 ? '38.25' : '43.5'}|${rcfg.colorId}`
+          ? `rail:irx-post|43.5|${rcfg.colorId}`
           : system.compositeSteelPosts
             ? 'rail:sleeve-ccs-4x4'
             : `rail:${system.id}-sleeve-${rcfg.heightIn}|${rcfg.colorId}`
       acc({
         section: S.railing,
-        item: `${stairPost.name} — ${rcfg.colorId}`,
+        item: `${stairPost.name}${system.id === 'irx' ? ' 43.5" (stair height)' : ''} — ${rcfg.colorId}`,
         sku: stairPostSku,
         detail: `${label} — stair rail ${edgeRailed ? 'bottom' : ''} posts${midPosts > 0 ? ` + ${midPosts} intermediates on the rake` : ''}`,
         qty: stairPostQty,

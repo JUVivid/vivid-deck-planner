@@ -26,6 +26,99 @@ const BASES: Record<Exclude<ViewKind, 'top'>, ViewBasis> = {
   W: { right: { x: 0, y: 1 }, toward: { x: -1, y: 0 }, title: 'West Elevation (viewed from the west)' },
 }
 
+/**
+ * Pinnacle decorative panels, drawn from the 2026 guide thumbnails:
+ *  - Chippendale Type 1: a pinwheel fretwork — slats on both diagonals, and
+ *    in each of the four triangles two more slats parallel to one arm (the
+ *    arm rotates quadrant to quadrant), the last one a small corner piece.
+ *  - Square Web: three nested square bands with mitred (diagonal) seams from
+ *    the corners to the inner square, which carries a small X.
+ * Slats are filled bands; (x0,y0) is the panel's top-left in px.
+ */
+function drawDecoPanel(ctx: CanvasRenderingContext2D, kind: 'chippendale' | 'square-web', x0: number, y0: number, wPx: number, hPx: number, color: string) {
+  const ux = (u: number) => x0 + u * wPx
+  const uy = (v: number) => y0 + v * hPx
+  const s = Math.min(wPx, hPx)
+  const slat = Math.max(1.5, 0.085 * s)
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(x0, y0, wPx, hPx)
+  ctx.clip()
+  ctx.strokeStyle = color
+  ctx.lineCap = 'butt'
+  // frame
+  ctx.lineWidth = Math.max(1, 0.05 * s)
+  ctx.strokeRect(x0, y0, wPx, hPx)
+  if (kind === 'chippendale') {
+    ctx.lineWidth = slat
+    const seg = (ax: number, ay: number, bx: number, by: number) => {
+      ctx.beginPath()
+      ctx.moveTo(ux(ax), uy(ay))
+      ctx.lineTo(ux(bx), uy(by))
+      ctx.stroke()
+    }
+    // the X
+    seg(0, 0, 1, 1)
+    seg(1, 0, 0, 1)
+    // pinwheel: each triangle between the arms takes slats parallel to one
+    // arm, stacked away from it at pitch p (clipped to its own triangle)
+    const p = 0.2
+    const tri = (a: [number, number], b: [number, number], c: [number, number], fn: () => void) => {
+      ctx.save()
+      ctx.beginPath()
+      ctx.moveTo(ux(a[0]), uy(a[1]))
+      ctx.lineTo(ux(b[0]), uy(b[1]))
+      ctx.lineTo(ux(c[0]), uy(c[1]))
+      ctx.closePath()
+      ctx.clip()
+      fn()
+      ctx.restore()
+    }
+    const C: [number, number] = [0.5, 0.5]
+    for (let k = 1; k <= 3; k++) {
+      const d = k * p * Math.SQRT2
+      // top triangle: "\" slats offset toward the top-right  (x − y = d)
+      tri([0, 0], [1, 0], C, () => seg(d, 0, 1 + d, 1))
+      // right triangle: "/" slats offset toward the bottom-right  (x + y = 1 + d)
+      tri([1, 0], [1, 1], C, () => seg(1 + d, 0, d, 1))
+      // bottom triangle: "\" slats offset toward the bottom-left  (x − y = −d)
+      tri([1, 1], [0, 1], C, () => seg(-d, 0, 1 - d, 1))
+      // left triangle: "/" slats offset toward the top-left  (x + y = 1 − d)
+      tri([0, 1], [0, 0], C, () => seg(1 - d, 0, -d, 1))
+    }
+  } else {
+    // nested bands (centre insets), mitred seams, inner X
+    ctx.lineWidth = slat
+    for (const i of [0.083, 0.245]) {
+      ctx.strokeRect(ux(i), uy(i), (1 - 2 * i) * wPx, (1 - 2 * i) * hPx)
+    }
+    const inner = 0.375
+    ctx.lineWidth = Math.max(1, 0.06 * s)
+    ctx.strokeRect(ux(inner), uy(inner), (1 - 2 * inner) * wPx, (1 - 2 * inner) * hPx)
+    ctx.beginPath()
+    ctx.moveTo(ux(inner), uy(inner))
+    ctx.lineTo(ux(1 - inner), uy(1 - inner))
+    ctx.moveTo(ux(1 - inner), uy(inner))
+    ctx.lineTo(ux(inner), uy(1 - inner))
+    ctx.stroke()
+    // mitre seams: thin background-coloured cuts corner → inner square
+    ctx.strokeStyle = '#fafaf8'
+    ctx.lineWidth = Math.max(1, 0.02 * s)
+    ctx.beginPath()
+    for (const [cx, cy] of [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ]) {
+      ctx.moveTo(ux(cx), uy(cy))
+      ctx.lineTo(ux(cx === 0 ? inner : 1 - inner), uy(cy === 0 ? inner : 1 - inner))
+    }
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
 export function renderElevation(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -91,6 +184,61 @@ export function renderElevation(
   ctx.textAlign = 'left'
   ctx.fillText(`frost depth ${project.settings.frostDepth}"`, 34, Y(-frostFt) - 5)
 
+  // house walls — every ledger edge is a wall of the house. Seen end-on it is
+  // a grey slab standing at the deck's side; seen from across the deck it is
+  // the grey backdrop the deck hangs on. Drawn first so everything sits in
+  // front of it, in a flat grey that can't be mistaken for lumber.
+  const WALL_FILL = '#b8b8b4'
+  const WALL_STROKE = '#8d8d88'
+  for (const tier of project.tiers) {
+    const rcfgW = project.settings.railing
+    const wallTopFt = tier.height + rcfgW.heightIn / 12 + 2.5
+    for (let i = 0; i < tier.outline.length; i++) {
+      if (!tier.edges[i]?.ledger) continue
+      const a = tier.outline[i]
+      const b = tier.outline[(i + 1) % tier.outline.length]
+      const out = edgeOutwardNormal(tier.outline, i)
+      const facing = dot(out, basis.toward)
+      const sideMag = dot(out, basis.right)
+      const xa = dot(a, basis.right)
+      const xb = dot(b, basis.right)
+      const lo = Math.min(xa, xb)
+      const hi = Math.max(xa, xb)
+      const yTop = Math.max(60, Y(wallTopFt))
+      ctx.fillStyle = WALL_FILL
+      ctx.strokeStyle = WALL_STROKE
+      ctx.lineWidth = 1
+      if (Math.abs(sideMag) > 0.5 && hi - lo < 0.5) {
+        // wall seen end-on: a slab from the ledger line outward (away from the deck)
+        const wallX = sideMag > 0 ? hi : lo
+        const thick = 0.75 * scale // nominal framed wall, to scale-ish
+        const x0 = sideMag > 0 ? X(wallX) : X(wallX) - thick
+        ctx.fillRect(x0, yTop, thick, groundY - yTop)
+        ctx.strokeRect(x0, yTop, thick, groundY - yTop)
+        // siding hint
+        ctx.strokeStyle = '#a3a39e'
+        for (let yy = yTop + 10; yy < groundY; yy += 10) {
+          ctx.beginPath()
+          ctx.moveTo(x0 + 1, yy)
+          ctx.lineTo(x0 + thick - 1, yy)
+          ctx.stroke()
+        }
+      } else if (facing < -0.5 && hi - lo > 0.5) {
+        // the house is BEHIND the deck: grey backdrop across the ledger length
+        ctx.fillRect(X(lo) - 6, yTop, (hi - lo) * scale + 12, groundY - yTop)
+        ctx.strokeRect(X(lo) - 6, yTop, (hi - lo) * scale + 12, groundY - yTop)
+        ctx.strokeStyle = '#a3a39e'
+        for (let yy = yTop + 10; yy < groundY; yy += 10) {
+          ctx.beginPath()
+          ctx.moveTo(X(lo) - 5, yy)
+          ctx.lineTo(X(hi) + 5, yy)
+          ctx.stroke()
+        }
+      }
+      // ledger facing the viewer = we are standing inside the house: no wall drawn
+    }
+  }
+
   // tiers far -> near
   const tiersSorted = [...project.tiers].sort((a, b) => {
     const na = Math.max(...a.outline.map((p) => dot(p, basis.toward)))
@@ -138,12 +286,15 @@ export function renderElevation(
     }
     // flush beams sit in the joist plane — draw here (behind the fascia band);
     // style is PER BEAM: an interior girder drops even on a flush-rim deck
+    // a beam running toward the viewer is seen END-ON: its true (ply) width
+    const plyWFt = (tier.framing.beamPly * 1.5) / 12
+    const beamSpan = (lo: number, hi: number): [number, number] =>
+      hi - lo < plyWFt ? [(lo + hi) / 2 - plyWFt / 2, (lo + hi) / 2 + plyWFt / 2] : [lo, hi]
     for (const bm of fr.beams) {
       if (bm.style !== 'flush') continue
       const a = dot(bm.seg.a, basis.right)
       const b = dot(bm.seg.b, basis.right)
-      const lo = Math.min(a, b)
-      const hi = Math.max(a, b)
+      const [lo, hi] = beamSpan(Math.min(a, b), Math.max(a, b))
       ctx.fillStyle = '#d99b52'
       ctx.strokeStyle = '#b97f28'
       ctx.fillRect(X(lo), Y(bm.postTopFt + beamD), (hi - lo) * scale, beamD * scale)
@@ -207,8 +358,7 @@ export function renderElevation(
       if (bm.style !== 'drop') continue
       const a = dot(bm.seg.a, basis.right)
       const b = dot(bm.seg.b, basis.right)
-      const lo = Math.min(a, b)
-      const hi = Math.max(a, b)
+      const [lo, hi] = beamSpan(Math.min(a, b), Math.max(a, b))
       ctx.fillStyle = '#e9b36a'
       ctx.strokeStyle = '#b97f28'
       ctx.lineWidth = 0.8
@@ -388,35 +538,7 @@ export function renderElevation(
                 ctx.fillRect(X(bx) - memberW / 2, Y(yInfillTop), memberW, (yInfillTop - yInfillBot) * scale)
               }
             }
-            ctx.strokeStyle = '#5b81b8'
-            ctx.lineWidth = Math.max(1, (1.25 / 12) * scale * 0.6)
-            ctx.strokeRect(X(px0), Y(py1), pw * scale, h * scale)
-            ctx.beginPath()
-            if (rinf.id.includes('web')) {
-              // square web: orthogonal grid, 3 × 3
-              for (let g = 1; g <= 2; g++) {
-                const gx = px0 + (pw * g) / 3
-                ctx.moveTo(X(gx), Y(py1))
-                ctx.lineTo(X(gx), Y(py0))
-                const gy = py0 + (h * g) / 3
-                ctx.moveTo(X(px0), Y(gy))
-                ctx.lineTo(X(px0 + pw), Y(gy))
-              }
-            } else {
-              // chippendale type 1: crossing diagonals + center diamond
-              ctx.moveTo(X(px0), Y(py1))
-              ctx.lineTo(X(px0 + pw), Y(py0))
-              ctx.moveTo(X(px0), Y(py0))
-              ctx.lineTo(X(px0 + pw), Y(py1))
-              const mx = px0 + pw / 2
-              const my = py0 + h / 2
-              ctx.moveTo(X(mx), Y(py1))
-              ctx.lineTo(X(px0 + pw), Y(my))
-              ctx.lineTo(X(mx), Y(py0))
-              ctx.lineTo(X(px0), Y(my))
-              ctx.lineTo(X(mx), Y(py1))
-            }
-            ctx.stroke()
+            drawDecoPanel(ctx, rinf.id.includes('web') ? 'square-web' : 'chippendale', X(px0), Y(py1), pw * scale, h * scale, '#5b81b8')
           } else if (rinf.kind === 'cable-vertical') {
             ctx.strokeStyle = '#6b7f99'
             ctx.lineWidth = 1
@@ -486,11 +608,12 @@ export function renderElevation(
       }
     }
 
-    // height labels
-    ctx.fillStyle = '#6d675a'
-    ctx.font = '11px ui-sans-serif, system-ui'
-    ctx.textAlign = 'left'
-    ctx.fillText(`${tier.name}: ${ftInlabel(tier.height)}`, X(tMax) + 10, Y(top) + 4)
+    // height label — set inside the rim band so it never collides with a
+    // stair rail rising off the deck's end
+    ctx.fillStyle = '#4b463a'
+    ctx.font = '600 11px ui-sans-serif, system-ui'
+    ctx.textAlign = 'center'
+    ctx.fillText(`${tier.name}: ${ftInlabel(tier.height)}`, X((tMin + tMax) / 2), Y(top - deckThk - joistD / 2) + 4)
     ctx.restore()
   }
 
@@ -617,10 +740,15 @@ export function renderElevation(
         const zUpper = top - (k - 1) * rFt // surface above this riser
         const zLower = top - k * rFt // surface below (grade/landing at last)
         const xFace = originSx + sgn * (k - 1) * tFt
-        // riser board closes the rise (TimberTech riser stock)
-        ctx.fillStyle = '#b58a52'
-        const rx = Math.min(xFace, xFace + sgn * riserThk)
-        ctx.fillRect(X(rx), Y(zUpper - scDeckThk), riserThk * scale, (zUpper - scDeckThk - zLower) * scale)
+        // riser board closes the rise (TimberTech riser stock) — its edge
+        // stands proud of the riser cut; drawn wide enough to read at any scale
+        const rwPx = Math.max(3, riserThk * scale)
+        ctx.fillStyle = '#9c6b33'
+        ctx.strokeStyle = '#5e3f1c'
+        ctx.lineWidth = 0.8
+        const rxPx = sgn > 0 ? X(xFace) : X(xFace) - rwPx
+        ctx.fillRect(rxPx, Y(zUpper - scDeckThk), rwPx, (zUpper - scDeckThk - zLower) * scale)
+        ctx.strokeRect(rxPx, Y(zUpper - scDeckThk), rwPx, (zUpper - scDeckThk - zLower) * scale)
         // tread boards on the step below (not after the final riser — that's the
         // landing): the real board layout, covering run + nosing edge to edge
         if (k <= sc.treadCount) {
@@ -669,7 +797,7 @@ export function renderElevation(
         ctx.fillRect(X(px0), Y(0), Math.abs(padW) * scale, (4 / 12) * scale)
         ctx.strokeRect(X(px0), Y(0), Math.abs(padW) * scale, (4 / 12) * scale)
       }
-      // ---- raked stair guard (4+ risers): posts top & bottom, raked rails, balusters ----
+      // ---- raked stair guard (4+ risers): posts ON the treads, raked rails, balusters ----
       if (sc.guardRequired) {
         const rcfg = project.settings.railing
         const rsys = railSystemById(rcfg.systemId) ?? RAILING_SYSTEMS[0]
@@ -678,15 +806,65 @@ export function renderElevation(
         const sizeIn = selectedPostOption(rsys, rcfg.postOptionId).sizeIn
         const postW = Math.max(2.5, (sizeIn / 12) * scale)
         const railFill = '#4a72ab'
-        const zNoseBot = landZ + rFt // last nosing
+        const railStroke = '#33517e'
+        const cosR = tFt / Math.hypot(tFt, rFt)
+        const topHFt = rtop.heightIn / 12 / cosR // plumb thickness of a raked rail
+        const botHFt = rsys.bottomRail.heightIn / 12 / cosR
+        const botGapFt = rsys.bottomRail.gapIn / 12
+        // the NOSING LINE: level at the deck, then one riser down per tread
+        const nosingPitch = rFt / tFt
+        const zNose = (x: number) => top - Math.max(0, sgn * (x - originSx)) * nosingPitch
         // top post = the deck run's shared corner post: rail centerline inset
         // inside the deck edge, so the level rail ends on one face of it and
         // the rake leaves the adjacent face — ONE post, not two
         const topSx = originSx - sgn * (2 / 12 + sizeIn / 24)
-        // posts: shared top post on the deck, bottom post at the landing
-        ctx.fillStyle = railFill
-        ctx.strokeStyle = '#33517e'
+        // every other post stands CENTERED on a tread: tread n covers
+        // ((n−1)·t, n·t] out from the rim — centre (n−½)·t, surface top − n·r.
+        // The bottom post is on the LAST tread, never on the ground.
+        const treadCenter = (n: number) => originSx + sgn * (n - 0.5) * tFt
+        const treadZ = (n: number) => top - n * rFt
+        const nBot = Math.max(1, sc.treadCount)
+        const xBot = treadCenter(nBot)
+        // stair sections come 6' — mids split the rake evenly, then snap onto
+        // the centre of the tread each one lands on
+        const rakeHoriz = Math.abs(xBot - topSx)
+        const rakeSlope = Math.hypot(rakeHoriz, top - zNose(xBot))
+        const stairBays = Math.max(1, Math.ceil(rakeSlope / 6))
+        const midTreads: number[] = []
+        for (let m = 1; m < stairBays; m++) {
+          const xm = topSx + sgn * rakeHoriz * (m / stairBays)
+          const n = Math.min(nBot, Math.max(1, Math.floor(Math.abs(xm - originSx) / tFt) + 1))
+          if (!midTreads.includes(n) && n < nBot) midTreads.push(n)
+        }
+        // raked rails first: bands whose TOP edge rides the nosing line at rail
+        // height, from the shared top post down to the bottom post (with the
+        // kink at the rim where level turns to rake); posts go over their ends
+        const band = (zTopAt: (x: number) => number, thk: number) => {
+          const xs = [topSx, originSx, xBot]
+          ctx.beginPath()
+          xs.forEach((x, i) => (i === 0 ? ctx.moveTo(X(x), Y(zTopAt(x))) : ctx.lineTo(X(x), Y(zTopAt(x)))))
+          for (let i = xs.length - 1; i >= 0; i--) ctx.lineTo(X(xs[i]), Y(zTopAt(xs[i]) - thk))
+          ctx.closePath()
+          ctx.fill()
+          ctx.stroke()
+        }
+        ctx.strokeStyle = railStroke
         ctx.lineWidth = 0.8
+        ctx.fillStyle = rtop.drinkRail ? '#c9a86a' : railFill
+        band((x) => zNose(x) + guardFt, topHFt)
+        ctx.fillStyle = railFill
+        band((x) => zNose(x) + botGapFt + botHFt, botHFt)
+        // balusters between the rakes
+        ctx.strokeStyle = '#5b81b8'
+        ctx.lineWidth = Math.max(1, (0.75 / 12) * scale)
+        const nBal = Math.max(2, Math.floor((rakeHoriz * 12) / 4.75))
+        for (let i2 = 1; i2 < nBal; i2++) {
+          const xb = topSx + sgn * rakeHoriz * (i2 / nBal)
+          ctx.beginPath()
+          ctx.moveTo(X(xb), Y(zNose(xb) + botGapFt + botHFt))
+          ctx.lineTo(X(xb), Y(zNose(xb) + guardFt - topHFt))
+          ctx.stroke()
+        }
         // stair posts get the same cap + skirt treatment as the deck run
         const stairCapSkirt = (x: number, topZ: number, baseZ: number) => {
           if (!rsys.postAccessory) return
@@ -703,69 +881,49 @@ export function renderElevation(
             ctx.fillRect(X(x) - skW / 2, Y(baseZ + 3 / 12), skW, Math.max(2, (3 / 12) * scale))
           }
         }
-        ctx.fillRect(X(topSx) - postW / 2, Y(top + guardFt + 0.05), postW, (guardFt + 0.05) * scale)
-        ctx.fillRect(X(xEnd) - postW / 2, Y(zNoseBot + guardFt + 0.05), postW, (zNoseBot + guardFt + 0.05 - landZ) * scale)
-        stairCapSkirt(xEnd, zNoseBot + guardFt + 0.05, landZ)
-        // intermediate posts: stair rail sections come 6' — a long rake can't
-        // run unsupported, so mids split it into equal bays. Each mid post
-        // stands ON the exact tread beneath it (never inside a step).
-        const rakeHoriz = Math.abs(xEnd - topSx)
-        const rakeSlope = Math.hypot(rakeHoriz, top - zNoseBot)
-        const stairBays = Math.max(1, Math.ceil(rakeSlope / 6))
-        for (let m = 1; m < stairBays; m++) {
-          const tM = m / stairBays
-          const xm = topSx + sgn * rakeHoriz * tM
-          const zm = top + (zNoseBot - top) * tM
-          // the tread under xm: tread n covers ((n−1)·t, n·t] out from the rim
-          const xRel = Math.max(0, Math.abs(xm - originSx))
-          const treadN = Math.min(sc.treadCount, Math.max(1, Math.floor(xRel / tFt) + 1))
-          const zBase = Math.max(landZ, top - treadN * rFt)
-          ctx.fillRect(X(xm) - postW / 2, Y(zm + guardFt + 0.05), postW, (zm + guardFt + 0.05 - zBase) * scale)
-          stairCapSkirt(xm, zm + guardFt + 0.05, zBase)
+        // a post's top sits a cap's worth above the rail AT THAT POST — on a
+        // tread centre that is half a riser taller than a deck post, exactly
+        // as the real stair posts are
+        const drawPost = (x: number, baseZ: number) => {
+          const topZ = zNose(x) + guardFt + 0.06
+          ctx.fillStyle = railFill
+          ctx.strokeStyle = railStroke
+          ctx.lineWidth = 0.8
+          ctx.fillRect(X(x) - postW / 2, Y(topZ), postW, (topZ - baseZ) * scale)
+          ctx.strokeRect(X(x) - postW / 2, Y(topZ), postW, (topZ - baseZ) * scale)
+          stairCapSkirt(x, topZ, baseZ)
         }
-        // raked top rail (springs off the shared post, follows the nosing line)
-        ctx.strokeStyle = railFill
-        ctx.lineWidth = Math.max(2, (rtop.heightIn / 12) * scale)
-        ctx.beginPath()
-        ctx.moveTo(X(topSx), Y(top + guardFt))
-        ctx.lineTo(X(xEnd), Y(zNoseBot + guardFt))
-        ctx.stroke()
-        // raked bottom rail
-        ctx.lineWidth = Math.max(1.5, (rsys.bottomRail.heightIn / 12) * scale)
-        ctx.beginPath()
-        ctx.moveTo(X(topSx), Y(top + rsys.bottomRail.gapIn / 12))
-        ctx.lineTo(X(xEnd), Y(zNoseBot + rsys.bottomRail.gapIn / 12))
-        ctx.stroke()
-        // balusters between the rakes
-        ctx.lineWidth = Math.max(1, (0.75 / 12) * scale)
-        const runFt = Math.abs(xEnd - topSx)
-        const nBal = Math.max(2, Math.floor((runFt * 12) / 4.75))
-        for (let i2 = 1; i2 < nBal; i2++) {
-          const t = i2 / nBal
-          const xb = topSx + sgn * runFt * t
-          const zn = top + (zNoseBot - top) * t
-          ctx.beginPath()
-          ctx.moveTo(X(xb), Y(zn + rsys.bottomRail.gapIn / 12))
-          ctx.lineTo(X(xb), Y(zn + guardFt))
-          ctx.stroke()
-        }
+        drawPost(topSx, top)
+        for (const n of midTreads) drawPost(treadCenter(n), treadZ(n))
+        drawPost(xBot, treadZ(nBot))
       }
     } else if (towards > 0.7) {
-      // facing the viewer: stringers + treads + risers face-on
+      // facing the viewer: every riser board is a full face and each tread
+      // shows its nosing edge across the width; the stringers sit BEHIND the
+      // risers and are ghosted through so the count still cross-checks the order
       const faceW = sc.attachWidthFt
       const faceStringers = sc.stringerCount
       const halfW = faceW / 2
-      ctx.strokeStyle = '#3f4753'
-      ctx.lineWidth = 1.2
-      ctx.strokeRect(X(originSx - halfW), Y(top), faceW * scale, sc.rise * scale)
-      for (let k = 1; k < sc.riserCount; k++) {
-        const z = top - k * rFt
-        ctx.beginPath()
-        ctx.moveTo(X(originSx - halfW), Y(z))
-        ctx.lineTo(X(originSx + halfW), Y(z))
-        ctx.stroke()
+      const landZ = top - sc.rise
+      for (let k = 1; k <= sc.riserCount; k++) {
+        const zTopR = top - (k - 1) * rFt - scDeckThk // under the tread above
+        const zBotR = Math.max(landZ, top - k * rFt) // on the tread below / landing
+        ctx.fillStyle = '#9c6b33'
+        ctx.strokeStyle = '#5e3f1c'
+        ctx.lineWidth = 0.8
+        ctx.fillRect(X(originSx - halfW), Y(zTopR), faceW * scale, (zTopR - zBotR) * scale)
+        ctx.strokeRect(X(originSx - halfW), Y(zTopR), faceW * scale, (zTopR - zBotR) * scale)
+        if (k <= sc.treadCount) {
+          const zT = top - k * rFt
+          ctx.fillStyle = '#c9a86a'
+          ctx.strokeStyle = '#8f7038'
+          ctx.fillRect(X(originSx - halfW), Y(zT), faceW * scale, scDeckThk * scale)
+          ctx.strokeRect(X(originSx - halfW), Y(zT), faceW * scale, scDeckThk * scale)
+        }
       }
-      // stringer positions show through as verticals
+      // stringers ghosted through the risers
+      ctx.save()
+      ctx.globalAlpha = 0.3
       ctx.strokeStyle = '#8a6a3a'
       ctx.lineWidth = Math.max(1, (1.5 / 12) * scale)
       for (let k = 0; k < faceStringers; k++) {
@@ -773,8 +931,46 @@ export function renderElevation(
         const sxP = originSx - halfW + faceW * (0.06 + t * 0.88)
         ctx.beginPath()
         ctx.moveTo(X(sxP), Y(top - scDeckThk))
-        ctx.lineTo(X(sxP), Y(0))
+        ctx.lineTo(X(sxP), Y(landZ))
         ctx.stroke()
+      }
+      ctx.restore()
+      // the stair guard's posts stand on the treads at each side of the flight
+      // (same placement as the side view: bottom post on the last tread, mids
+      // on the tread centre each rake bay lands on), seen here head-on
+      if (sc.guardRequired) {
+        const rcfg = project.settings.railing
+        const rsys = railSystemById(rcfg.systemId) ?? RAILING_SYSTEMS[0]
+        const guardFt = rcfg.heightIn / 12
+        const sizeIn = selectedPostOption(rsys, rcfg.postOptionId).sizeIn
+        const postW = Math.max(2.5, (sizeIn / 12) * scale)
+        const insetFt = 2 / 12 + sizeIn / 24
+        const nBot = Math.max(1, sc.treadCount)
+        const rakeHoriz = (nBot - 0.5) * tFt + insetFt
+        const rakeSlope = Math.hypot(rakeHoriz, (nBot - 0.5) * rFt)
+        const stairBays = Math.max(1, Math.ceil(rakeSlope / 6))
+        const treads = new Set<number>([nBot])
+        for (let m = 1; m < stairBays; m++) {
+          const d = -insetFt + rakeHoriz * (m / stairBays)
+          const n = Math.min(nBot, Math.max(1, Math.floor(d / tFt) + 1))
+          if (n < nBot) treads.add(n)
+        }
+        ctx.fillStyle = '#4a72ab'
+        ctx.strokeStyle = '#33517e'
+        ctx.lineWidth = 0.8
+        for (const n of treads) {
+          const baseZ = top - n * rFt
+          const topZ = baseZ + rFt / 2 + guardFt + 0.06 // rail rides the nosing line
+          for (const sx of [originSx - halfW + insetFt, originSx + halfW - insetFt]) {
+            ctx.fillRect(X(sx) - postW / 2, Y(topZ), postW, (topZ - baseZ) * scale)
+            ctx.strokeRect(X(sx) - postW / 2, Y(topZ), postW, (topZ - baseZ) * scale)
+            if (rsys.postAccessory) {
+              const capW = postW * 1.3
+              const capH = Math.max(2, (1 / 12) * scale)
+              ctx.fillRect(X(sx) - capW / 2, Y(topZ) - capH, capW, capH)
+            }
+          }
+        }
       }
       // mid-span girder (face-on: full band) + its posts
       for (const ms of sc.midSupports) {

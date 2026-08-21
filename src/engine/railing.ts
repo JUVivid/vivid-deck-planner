@@ -196,11 +196,17 @@ export function computeRailing(tier: Tier, stairCalcs: StairsCalc[], settings: P
   // one deck run, so they keep the base inset endpoint — which lands exactly
   // on the stair guard's rail centerline (the shared post).
 
-  // base inset endpoints
+  // base inset endpoints. A plain END (the run dies at the house wall or an
+  // open deck edge — no corner post shared with another run) is ALSO pulled
+  // back along the edge by the same inset: the end post has to stand fully
+  // on the deck with its face just off the wall, never straddle the boundary
   for (const piece of res.pieces) {
     const off = mul(edgeOutwardNormal(tier.outline, piece.edgeIndex), -res.railInsetFt)
     piece.railA = add(piece.a, off)
     piece.railB = add(piece.b, off)
+    const along = norm(sub(piece.b, piece.a))
+    if (piece.postRoles[0] === 'end') piece.railA = add(piece.railA, mul(along, res.railInsetFt))
+    if (piece.postRoles[piece.postRoles.length - 1] === 'end') piece.railB = add(piece.railB, mul(along, -res.railInsetFt))
   }
   // corner groups: piece ends that share an outline vertex
   interface EndRef {
