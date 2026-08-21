@@ -1214,7 +1214,9 @@ describe('railing order math — bay division, parts, glass spans, cable runs', 
     expect(rl.chains[0].lenFt).toBeCloseTo(44, 1)
     expect(rl.chains[0].corners).toBe(2)
     const kits = railLines(c).find((l) => l.item.includes('IRX cable kit'))!
-    expect(kits.item).toContain("45'") // 44' + termination slack → 45' kit
+    // kits are sold 10/20/40/60 ONLY (retail-confirmed) — 44' + slack → 60' kit
+    expect(kits.item).toContain("60'")
+    expect(kits.sku).toBe('rail:irx-cable-kit-60')
     expect(kits.qty).toBe(11) // 11 cables at 36"
     // 1 intermediate support per opening
     expect(railLines(c).find((l) => l.item.includes('intermediate cable support'))!.qty).toBe(rl.sections)
@@ -1834,6 +1836,25 @@ describe('quote pricing integrity — receipts attach, unpriced never quotes low
     p2.settings.quote.materialsOverride = 30000
     const c2 = computeProject(p2)
     expect(c2.quote.sections.find((s) => s.id === 'deck')!.price).not.toBeNull()
+  })
+
+  it('glass and cable configs carry ZERO unpriced railing lines', () => {
+    // the four specialty setups the company sells — each must price end to end
+    const configs: [string, string, Record<string, unknown>][] = [
+      ['irx', 'glass', { colorId: 'Black', heightIn: 36, topStyleId: 'irx-classic' }],
+      ['irx', 'h-cable', { colorId: 'Black', heightIn: 36, topStyleId: 'irx-classic' }],
+      ['classic-composite', 'glass', { colorId: 'Matte Black', heightIn: 36, topStyleId: 'radiance-top' }],
+      ['classic-composite', 'cable', { colorId: 'Matte Black', heightIn: 36, topStyleId: 'radiance-top' }],
+    ]
+    for (const [systemId, infillId, extra] of configs) {
+      const p = rectDeck(20, 12)
+      Object.assign(p.settings.railing, { systemId, infillId }, extra)
+      const c = computeProject(p)
+      const cat = c.quote.internal.byCategory.find((x) => x.id === 'railing')!
+      expect(cat.unpriced, `${systemId}/${infillId}: ${cat.unpricedItems.join(', ')}`).toBe(0)
+      expect(cat.material).toBeGreaterThan(1000)
+      expect(c.quote.sections.find((s) => s.id === 'railing')!.price).not.toBeNull()
+    }
   })
 
   it('IRX stair guard prices from the stair-panel receipt + real rake top rails', () => {

@@ -920,14 +920,35 @@ function railingBomForTier(
         unit: 'ea',
         note: inf.kind === 'glass' ? '1/4" tempered glass sourced locally; 6\' kits only.' : undefined,
       })
-      acc({
-        section: S6,
-        item: top.drinkRail ? `IRX Drink Rail panel cover + clip kit ${len}'` : `IRX ${top.name} ${len}' — ${color}`,
-        sku: top.drinkRail ? `rail:irx-drink-cover-${len}|${color}` : `rail:irx-top-${irxTopKind}-${len}|${color}`,
-        detail: top.drinkRail && drinkBoardName ? `${tierName}: capped with ${drinkBoardName}` : `${tierName}: top rail w/ collars`,
-        qty: count,
-        unit: 'ea',
-      })
+      if (top.drinkRail) {
+        // drink rail = Universal Panel Cover over the panel + clip hardware,
+        // capped with the deck board (the board itself rides the decking order)
+        acc({
+          section: S6,
+          item: `IRX Universal Panel Cover ${len}' (drink rail) — ${color}`,
+          sku: `rail:irx-panel-cover-${len}|${color}`,
+          detail: drinkBoardName ? `${tierName}: capped with ${drinkBoardName}` : `${tierName}: drink rail base`,
+          qty: count,
+          unit: 'ea',
+        })
+        acc({
+          section: S6,
+          item: 'IRX Drink Rail clip hardware kit (12 clips)',
+          sku: 'rail:irx-drink-cliphw',
+          detail: `${tierName}: 4 clips per 6' section, 6 per 8'`,
+          qty: (count * (len === 8 ? 6 : 4)) / 12,
+          unit: 'ea',
+        })
+      } else {
+        acc({
+          section: S6,
+          item: `IRX ${top.name} ${len}' — ${color}`,
+          sku: `rail:irx-top-${irxTopKind}-${len}|${color}`,
+          detail: `${tierName}: top rail w/ collars`,
+          qty: count,
+          unit: 'ea',
+        })
+      }
       if (inf.kind === 'cable-vertical') {
         acc({
           section: S6,

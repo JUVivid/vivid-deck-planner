@@ -749,7 +749,8 @@ export const RAILING_SYSTEMS: RailingSystem[] = [
           cablesPerHeight: { 36: 11, 42: 14 },
           ordering: 'per-run',
           maxRunFt: 60,
-          kitLengthsFt: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60],
+          // retail-confirmed 2026-08-20: kits come 10/20/40/60 ft ONLY
+          kitLengthsFt: [10, 20, 40, 60],
           intermediatesPer: { 6: 1, 8: 1 },
           note: 'Cables run continuously through dedicated pre-drilled 3"x3" posts (end / inline / 90° corner / stair roles; 42" stair posts for 36" rails). One cable kit per cable per run (pre-attached stud — cannot be cut in two); runs max 60\', then a new end post starts a new run. 1 intermediate cable support per opening, cut to height. Top-rail frame kits only (no bottom rail); all cables incl. the bottom cable are required. Cable count is set by the pre-drilled posts — verify per height.',
         },

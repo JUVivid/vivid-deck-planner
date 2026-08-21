@@ -87,6 +87,26 @@ export const RETAIL_EST: Record<string, number> = {
   'rail:secure-mount': 122.97, // Secure-Mount steel post @ DecksDirect
   'rail:surface-mount-hw': 26.97, // Deck Mounting Kit (leveling + base plate) @ DecksDirect
   'rail:post-hw-set': 16.8, // 2x 1/2"x8" carriage bolts + nuts/washers + 2ft 2x8 blocking (component build)
+  // --- IRX accessories, colorless parts (Advantage Lumber / The Deck Store, 2026-08-20) ---
+  'rail:irx-drink-cliphw': 149.99, // 12-clip hardware kit (4 clips per 6' section, 6 per 8')
+  'rail:irx-cable-kit-10': 122.33, // stainless cable + stud/receiver/fast-receiver + caps
+  'rail:irx-cable-kit-20': 137.76,
+  'rail:irx-cable-kit-40': 165.84,
+  'rail:irx-cable-kit-60': 186.99, // retailers diverge $173-187 — dearer wins
+  'rail:irx-cable-intermediate': 31.51, // level center-baluster replacement, cut to height
+  // --- Feeney CableRail (DecksDirect, 2026-08-20) ---
+  // per-section hardware kit = cables x (Quick-Connect $20.75 + threaded terminal $27.50)
+  'rail:feeney-kit-36': 434.25, // 9 cables x $48.25
+  'rail:feeney-kit-42': 579.0, // 12 cables x $48.25
+  'rail:feeney-intermediate-36': 57.83, // picket kit #7648 fits 36" + 42" (field trim)
+  'rail:feeney-intermediate-42': 57.83,
+  'rail:feeney-spool-100': 89.6, // 1/8" 316 SS bulk reel #5100
+  'rail:feeney-spool-500': 447.89, // #5500
+  // --- TimberTech CC glass channel kit 6' (DecksDirect, 2026-08-20) ---
+  'rail:glass-channel-6|Matte Black': 209.99, // AZTGLASS6B — channels + gaskets, glass local
+  'rail:glass-channel-6|Matte Espresso': 209.99, // dark-colour price
+  'rail:glass-channel-6|Matte White': 199.99,
+  'rail:glass-channel-6|White': 199.99,
   // --- concrete forms & flashing ---
   'misc:tube-10': 19.49, // Quik-Tube 10x48 @ True Value
   'misc:tube-12': 22.49, // Quik-Tube 12x48 @ True Value / Do it Best
@@ -94,4 +114,46 @@ export const RETAIL_EST: Record<string, number> = {
   'misc:tube-16': 21.76, // Sakrete 16x48 @ Lowe's
   'misc:tube-18': 48.88, // Sonotube Rainguard 18x48 @ EMI Supply (commercial grade)
   'misc:ledger-flash': 3.09, // per LF: Amerimax galv Z-flashing $1.42/lf + PVC drip cap $1.67/lf
+}
+
+/**
+ * IRX (Impression Rail Express) retail — Advantage Lumber, corroborated by
+ * The Deck Store / Lowe's, 2026-08-20. Retail is IDENTICAL across the three
+ * colours, so one price fans out to Black / White / Dark Bronze keys.
+ * Receipts (Black posts, 36" panels, classic tops, stair panel) still win in
+ * unitCostDetail — these fill the parts the Lansing invoices didn't cover.
+ */
+const IRX_COLORS = ['Black', 'White', 'Dark Bronze']
+const IRX_RETAIL: Record<string, number> = {
+  'rail:irx-panel-42x6': 240.94, // universal baluster panel kit 42" x 6'
+  'rail:irx-panel-42x8': 325.32,
+  'rail:irx-glass-36x6': 202.43, // ONE universal 6' glass kit serves both heights
+  'rail:irx-glass-42x6': 202.43,
+  'rail:irx-vcable-36x6': 474.35, // vertical cable level panel kits
+  'rail:irx-vcable-36x8': 601.7,
+  'rail:irx-vcable-42x6': 501.94,
+  'rail:irx-vcable-42x8': 639.68,
+  'rail:irx-panel-cover-6': 45.13,
+  'rail:irx-panel-cover-8': 52.62,
+  'rail:irx-channel-6': 37.6, // unpunched support channel
+  'rail:irx-channel-8': 45.13,
+  'rail:irx-top-modern-6': 83.73,
+  'rail:irx-top-modern-8': 97.94,
+  'rail:irx-top-classic-6': 83.73, // receipt overrides Black ($59.73/$69.93)
+  'rail:irx-top-classic-8': 97.94,
+  'rail:irx-hcable-kit-6': 186.68, // level section kit: center support + channel + brackets
+  'rail:irx-hcable-kit-8': 217.48,
+  'rail:irx-hcable-post-end|38': 218.32, // post kits include post, base, cap, skirt
+  'rail:irx-hcable-post-end|43': 228.73,
+  'rail:irx-hcable-post-inline|38': 164.05,
+  'rail:irx-hcable-post-inline|43': 172.29,
+  'rail:irx-hcable-post-corner|38': 191.87,
+  'rail:irx-hcable-post-corner|43': 206.78,
+  'rail:irx-stair-panel-36x6': 260.3, // receipt overrides Black ($185.78)
+  'rail:irx-stair-panel-42x6': 277.46,
+  'rail:irx-post|38.25': 93.86, // receipt overrides Black ($67.01)
+  'rail:irx-post|43.5': 108.92, // receipt overrides Black ($77.01)
+}
+for (const [base, price] of Object.entries(IRX_RETAIL)) {
+  for (const c of IRX_COLORS) RETAIL_EST[`${base}|${c}`] = price
 }
