@@ -1008,14 +1008,14 @@ function railingBomForTier(
       // Pinnacle decorative panels are SQUARE (29¾" / 35¾") — whole panels per
       // section, replacing the kit's balusters
       if (inf.kind === 'panel') {
-        const sideFt = (cfg.heightIn === 42 ? 35.75 : 29.75) / 12
-        const perSection = Math.max(1, Math.floor((len + 0.1) / (sideFt + 0.1)))
+        // per the 2026 guide photos: ONE square accent panel sits CENTERED in
+        // each level section — the kit's solid balusters fill the rest of the bay
         acc({
           section: S6,
           item: `Pinnacle Decorative Panel "${inf.id.includes('web') ? 'Square Web' : 'Chippendale Type 1'}" for ${cfg.heightIn}" rails`,
           sku: `rail:pinnacle-panel|${inf.id.includes('web') ? 'square-web' : 'chippendale'}|${cfg.heightIn}`,
-          detail: `${tierName}: ${perSection} per ${len}' section — panels replace the kit balusters; level sections only`,
-          qty: count * perSection,
+          detail: `${tierName}: 1 accent panel centered per level section — the kit's solid balusters fill the rest`,
+          qty: count,
           unit: 'ea',
         })
       }

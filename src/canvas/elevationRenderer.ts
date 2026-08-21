@@ -363,48 +363,60 @@ export function renderElevation(
             ctx.lineTo(X(gx0 + (inX1 - inX0) * 0.45), Y(yInfillTop - 0.2))
             ctx.stroke()
           } else if (rinf.kind === 'panel') {
-            // Pinnacle deco panels are SQUARE (29¾" for 36" rails / 35¾" for
-            // 42") — a bay holds whole squares side by side, framed, with the
-            // pattern routed inside
+            // per the 2026 guide photos: ONE square accent panel (29¾" for 36"
+            // rails / 35¾" for 42") sits CENTERED in the bay, and the kit's
+            // solid square balusters fill both sides of it
             const side = (rcfg.heightIn === 42 ? 35.75 : 29.75) / 12
             const clear = inX1 - inX0
-            const nP = Math.max(1, Math.floor((clear + 0.1) / (side + 0.1)))
-            const gap = (clear - nP * side) / (nP + 1)
+            const pw = Math.min(side, clear)
+            const px0 = inX0 + Math.max(0, (clear - pw) / 2)
+            const py0 = yInfillBot
+            const py1 = Math.min(yInfillTop, yInfillBot + side)
+            const h = py1 - py0
+            const bw = 1.25 / 12
+            ctx.fillStyle = '#5b81b8'
+            for (const [rx0, rx1] of [
+              [inX0, px0],
+              [px0 + pw, inX1],
+            ] as [number, number][]) {
+              const rc = rx1 - rx0
+              if (rc < bw * 1.5) continue
+              const n = Math.max(1, Math.round((rc * 12) / 4.75))
+              const step = (rc - n * bw) / (n + 1)
+              for (let i2 = 1; i2 <= n; i2++) {
+                const bx = rx0 + step * i2 + bw * (i2 - 1) + bw / 2
+                ctx.fillRect(X(bx) - memberW / 2, Y(yInfillTop), memberW, (yInfillTop - yInfillBot) * scale)
+              }
+            }
             ctx.strokeStyle = '#5b81b8'
             ctx.lineWidth = Math.max(1, (1.25 / 12) * scale * 0.6)
-            for (let pI = 0; pI < nP; pI++) {
-              const px0 = inX0 + gap + pI * (side + gap)
-              const py0 = yInfillBot
-              const py1 = Math.min(yInfillTop, yInfillBot + side)
-              const h = py1 - py0
-              ctx.strokeRect(X(px0), Y(py1), side * scale, h * scale)
-              ctx.beginPath()
-              if (rinf.id.includes('web')) {
-                // square web: orthogonal grid, 3 × 3
-                for (let g = 1; g <= 2; g++) {
-                  const gx = px0 + (side * g) / 3
-                  ctx.moveTo(X(gx), Y(py1))
-                  ctx.lineTo(X(gx), Y(py0))
-                  const gy = py0 + (h * g) / 3
-                  ctx.moveTo(X(px0), Y(gy))
-                  ctx.lineTo(X(px0 + side), Y(gy))
-                }
-              } else {
-                // chippendale type 1: crossing diagonals + center diamond
-                ctx.moveTo(X(px0), Y(py1))
-                ctx.lineTo(X(px0 + side), Y(py0))
-                ctx.moveTo(X(px0), Y(py0))
-                ctx.lineTo(X(px0 + side), Y(py1))
-                const mx = px0 + side / 2
-                const my = py0 + h / 2
-                ctx.moveTo(X(mx), Y(py1))
-                ctx.lineTo(X(px0 + side), Y(my))
-                ctx.lineTo(X(mx), Y(py0))
-                ctx.lineTo(X(px0), Y(my))
-                ctx.lineTo(X(mx), Y(py1))
+            ctx.strokeRect(X(px0), Y(py1), pw * scale, h * scale)
+            ctx.beginPath()
+            if (rinf.id.includes('web')) {
+              // square web: orthogonal grid, 3 × 3
+              for (let g = 1; g <= 2; g++) {
+                const gx = px0 + (pw * g) / 3
+                ctx.moveTo(X(gx), Y(py1))
+                ctx.lineTo(X(gx), Y(py0))
+                const gy = py0 + (h * g) / 3
+                ctx.moveTo(X(px0), Y(gy))
+                ctx.lineTo(X(px0 + pw), Y(gy))
               }
-              ctx.stroke()
+            } else {
+              // chippendale type 1: crossing diagonals + center diamond
+              ctx.moveTo(X(px0), Y(py1))
+              ctx.lineTo(X(px0 + pw), Y(py0))
+              ctx.moveTo(X(px0), Y(py0))
+              ctx.lineTo(X(px0 + pw), Y(py1))
+              const mx = px0 + pw / 2
+              const my = py0 + h / 2
+              ctx.moveTo(X(mx), Y(py1))
+              ctx.lineTo(X(px0 + pw), Y(my))
+              ctx.lineTo(X(mx), Y(py0))
+              ctx.lineTo(X(px0), Y(my))
+              ctx.lineTo(X(mx), Y(py1))
             }
+            ctx.stroke()
           } else if (rinf.kind === 'cable-vertical') {
             ctx.strokeStyle = '#6b7f99'
             ctx.lineWidth = 1

@@ -1231,14 +1231,15 @@ describe('railing order math — bay division, parts, glass spans, cable runs', 
     expect(channels.reduce((s, l) => s + l.qty, 0)).toBe(rl.sections)
   })
 
-  it('Pinnacle Chippendale orders whole SQUARE panels + a bracket kit per section', () => {
+  it('Pinnacle Chippendale orders ONE centered accent panel + a bracket kit per section', () => {
     const c = computeProject(railDeck('pinnacle', 'chippendale', { heightIn: 36 }))
     const rl = [...c.byTier.values()][0].railing
     // sections [6,8]: 20' → 3×8', sides → 2×6' each = 7 sections
     expect(rl.sections).toBe(7)
     const panels = railLines(c).find((l) => l.item.includes('Chippendale'))!
-    // 29.75" squares: 2 per 6' section (×4) + 3 per 8' section (×3) = 17
-    expect(panels.qty).toBe(17)
+    // guide photos: 1 square panel centered per section, kit balusters flank it
+    expect(panels.qty).toBe(7)
+    expect(panels.sku).toBe('rail:pinnacle-panel|chippendale|36')
     expect(railLines(c).find((l) => l.item.includes('rail bracket kit'))!.qty).toBe(7)
   })
 })
