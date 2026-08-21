@@ -87,6 +87,55 @@ export const RETAIL_EST: Record<string, number> = {
   'rail:secure-mount': 122.97, // Secure-Mount steel post @ DecksDirect
   'rail:surface-mount-hw': 26.97, // Deck Mounting Kit (leveling + base plate) @ DecksDirect
   'rail:post-hw-set': 16.8, // 2x 1/2"x8" carriage bolts + nuts/washers + 2ft 2x8 blocking (component build)
+  // --- Statement Rail, White only (Lowe's / The Deck Store, 2026-08-20 — dearer wins) ---
+  'rail:statement-kit|hollow-sq|6x36|White': 360.99, // full kit: rails + reinforcements + brackets + 14 balusters
+  'rail:statement-kit|hollow-sq|8x36|White': 459.99,
+  'rail:statement-kit|hollow-sq|6x42|White': 409.99,
+  'rail:statement-kit|hollow-sq|8x42|White': 530.99,
+  'rail:statement-kit|round-al|6x36|White': 409.99, // round aluminum baluster versions
+  'rail:statement-kit|round-al|8x36|White': 527.99,
+  'rail:statement-kit|round-al|6x42|White': 480.99,
+  'rail:statement-kit|round-al|8x42|White': 622.99,
+  'rail:statement-stair-kit|hollow-sq|36|White': 468.99, // racks 18-40°
+  'rail:statement-stair-kit|round-al|36|White': 539.99,
+  // no 42" stair kit exists in this line — the 36" stair kit is what gets bought
+  'rail:statement-stair-kit|hollow-sq|42|White': 468.99,
+  'rail:statement-stair-kit|round-al|42|White': 539.99,
+  'rail:statement-brackets': 56.99, // ST60BKTSET, 4 SS brackets + screws
+  'rail:statement-stair-brackets': 56.99, // ST60STAIRSET
+  'rail:statement-sleeve-36|White': 122.99, // 5" x 48" sleeve w/ shims (only short length made)
+  'rail:statement-sleeve-42|White': 286.68, // 5" x 108" sleeve — TimberTech specs it for 42"
+  // --- Pinnacle Rail, White only (Lowe's, 2026-08-20) ---
+  'rail:pinnacle-brackets': 52.44, // PN40BKTSET
+  'rail:pinnacle-stair-brackets': 84.77, // PN40STAIRSET
+  'rail:pinnacle-sleeve-36|White': 122.99, // shares the 5" sleeve with Statement
+  'rail:pinnacle-sleeve-42|White': 286.68,
+  'rail:pinnacle-panel|chippendale|36': 495.49, // PN40DP36-1, 29.75" sq PVC infill panel
+  'rail:pinnacle-panel|chippendale|42': 715.5, // PN40DP42-1, 35.75" sq
+  'rail:pinnacle-panel|square-web|36': 527.21, // PN40DP36-3
+  'rail:pinnacle-panel|square-web|42': 761.29, // PN40DP42-3
+  // --- 5" flat cap + skirt for Statement/Pinnacle sleeves (Deck Store, 2026-08-20) ---
+  'rail:capskirt5|White': 67.98, // TTNCFLAT5 $36.99 + TTNBTR5-EX $30.99
+  // --- Advantage Rail SPEEDLoc kits (Advantage Lumber, 2026-08-20) ---
+  'rail:advantage-kit|hollow-sq|6x36|Matte White': 195.11, // kit incl. balusters, hardware, footblocks
+  'rail:advantage-kit|hollow-sq|8x36|Matte White': 253.63,
+  'rail:advantage-kit|hollow-sq|6x42|Matte White': 230.22,
+  'rail:advantage-kit|hollow-sq|8x42|Matte White': 299.3,
+  'rail:advantage-kit|hollow-sq|6x36|Matte Black': 243.89,
+  'rail:advantage-kit|hollow-sq|8x36|Matte Black': 317.05,
+  'rail:advantage-kit|hollow-sq|6x42|Matte Black': 287.79,
+  'rail:advantage-kit|hollow-sq|8x42|Matte Black': 374.11,
+  'rail:advantage-kit|hollow-sq|6x36|Matte Espresso': 243.89, // dark colours price alike
+  'rail:advantage-kit|hollow-sq|8x36|Matte Espresso': 317.05,
+  'rail:advantage-kit|hollow-sq|6x42|Matte Espresso': 287.79,
+  'rail:advantage-kit|hollow-sq|8x42|Matte Espresso': 374.11,
+  'rail:advantage-stair-kit|hollow-sq|36|Matte White': 224.38,
+  'rail:advantage-stair-kit|hollow-sq|42|Matte White': 264.75,
+  'rail:advantage-stair-kit|hollow-sq|36|Matte Black': 280.46,
+  'rail:advantage-stair-kit|hollow-sq|42|Matte Black': 330.95,
+  'rail:advantage-stair-kit|hollow-sq|36|Matte Espresso': 280.46,
+  'rail:advantage-stair-kit|hollow-sq|42|Matte Espresso': 330.95,
+  // (Advantage round-aluminum kits exist but were not itemized — stays unpriced)
   // --- IRX accessories, colorless parts (Advantage Lumber / The Deck Store, 2026-08-20) ---
   'rail:irx-drink-cliphw': 149.99, // 12-clip hardware kit (4 clips per 6' section, 6 per 8')
   'rail:irx-cable-kit-10': 122.33, // stainless cable + stud/receiver/fast-receiver + caps
@@ -156,4 +205,25 @@ const IRX_RETAIL: Record<string, number> = {
 }
 for (const [base, price] of Object.entries(IRX_RETAIL)) {
   for (const c of IRX_COLORS) RETAIL_EST[`${base}|${c}`] = price
+}
+
+/**
+ * Pinnacle level kits (Lowe's, 2026-08-20). The base PN40350F kit is the same
+ * whether balusters stay in or a decorative panel replaces them, so one price
+ * fans across the three infill ids (panels themselves are separate lines).
+ */
+const PINNACLE_KIT: Record<string, number> = {
+  '6x36': 375.94,
+  '8x36': 487.15,
+  '6x42': 420.42,
+  '8x42': 542.77,
+}
+const PINNACLE_STAIR: Record<string, number> = {
+  // stair kits exist in 36" only — that kit is what gets bought for 42" jobs too
+  '36': 387.03,
+  '42': 387.03,
+}
+for (const inf of ['solid-sq', 'chippendale', 'square-web']) {
+  for (const [size, price] of Object.entries(PINNACLE_KIT)) RETAIL_EST[`rail:pinnacle-kit|${inf}|${size}|White`] = price
+  for (const [h, price] of Object.entries(PINNACLE_STAIR)) RETAIL_EST[`rail:pinnacle-stair-kit|${inf}|${h}|White`] = price
 }

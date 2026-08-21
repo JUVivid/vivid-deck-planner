@@ -1845,6 +1845,9 @@ describe('quote pricing integrity — receipts attach, unpriced never quotes low
       ['irx', 'h-cable', { colorId: 'Black', heightIn: 36, topStyleId: 'irx-classic' }],
       ['classic-composite', 'glass', { colorId: 'Matte Black', heightIn: 36, topStyleId: 'radiance-top' }],
       ['classic-composite', 'cable', { colorId: 'Matte Black', heightIn: 36, topStyleId: 'radiance-top' }],
+      ['statement', 'hollow-sq', { colorId: 'White', heightIn: 36, topStyleId: 'statement-top' }],
+      ['pinnacle', 'chippendale', { colorId: 'White', heightIn: 36, topStyleId: 'pinnacle-top' }],
+      ['advantage', 'hollow-sq', { colorId: 'Matte Black', heightIn: 36, topStyleId: 'advantage-top' }],
     ]
     for (const [systemId, infillId, extra] of configs) {
       const p = rectDeck(20, 12)

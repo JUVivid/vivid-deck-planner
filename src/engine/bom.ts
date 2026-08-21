@@ -646,11 +646,12 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
       // intermediate post at every break (matches the drawings)
       const rakeSlopeFt = Math.hypot(sc.totalRunFt, sc.rise)
       const stairBays = Math.max(1, Math.ceil(rakeSlopeFt / 6))
+      const sInf = system.infills.find((i) => i.id === rcfg.infillId) ?? system.infills[0]
       const stairSectionSku =
         system.id === 'irx'
           ? `rail:irx-stair-panel-${rcfg.heightIn}x6|${rcfg.colorId}`
-          : system.id === 'statement' || system.id === 'pinnacle'
-            ? `rail:${system.id}-stair-kit-${rcfg.heightIn}|${rcfg.colorId}`
+          : system.id === 'statement' || system.id === 'pinnacle' || system.id === 'advantage'
+            ? `rail:${system.id}-stair-kit|${sInf.id}|${rcfg.heightIn}|${rcfg.colorId}`
             : 'rail:stair-rail-6'
       acc({
         section: S.railing,
@@ -714,7 +715,8 @@ export function buildBom(project: Project, parts: Map<string, TierParts>, stairs
         acc({
           section: S.railing,
           item: `${capName2} + skirt`,
-          sku: `rail:capskirt|${rcfg.colorId}`,
+          // 5" sleeves (Statement/Pinnacle) take the dearer 5" flat cap + skirt
+          sku: system.post.sizeIn >= 5 ? `rail:capskirt5|${rcfg.colorId}` : `rail:capskirt|${rcfg.colorId}`,
           detail: `${label} — stair rail posts`,
           qty: stairPostQty,
           unit: 'ea',
@@ -983,7 +985,7 @@ function railingBomForTier(
       acc({
         section: S6,
         item: `${system.name} ${top.drinkRail ? 'rail panel (drink rail)' : 'rail kit'} ${len}' x ${cfg.heightIn}" — ${color}`,
-        sku: `rail:${system.id}-kit|${len}x${cfg.heightIn}|${color}`,
+        sku: `rail:${system.id}-kit|${inf.id}|${len}x${cfg.heightIn}|${color}`,
         detail: `${tierName}: ${inf.name}`,
         qty: count,
         unit: 'ea',
@@ -1167,7 +1169,14 @@ function railingBomForTier(
       acc({ section: S6, item: `${opt.name}${heightNote} — ${color}`, sku: postSku, detail: `${tierName}: rail posts`, qty: total, unit: 'ea' })
       if (opt.mount === 'sleeve') {
         acc({ section: S6, item: "4x4-8' PT post", sku: 'lumber:4x4-8', detail: `${tierName}: plumb/level structural post inside each sleeve`, qty: total, unit: 'ea' })
-        acc({ section: S6, item: `${capName} + skirt`, sku: `rail:capskirt|${color}`, detail: `${tierName}: ${color}`, qty: total, unit: 'ea' })
+        acc({
+          section: S6,
+          item: `${capName} + skirt`,
+          sku: system.post.sizeIn >= 5 ? `rail:capskirt5|${color}` : `rail:capskirt|${color}`,
+          detail: `${tierName}: ${color}`,
+          qty: total,
+          unit: 'ea',
+        })
       }
     }
   }
